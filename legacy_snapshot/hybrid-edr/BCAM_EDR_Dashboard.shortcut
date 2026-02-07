@@ -1,0 +1,41 @@
+{
+  "WFWorkflowActions": [
+    {
+      "WFWorkflowActionIdentifier": "is.workflow.actions.url",
+      "WFWorkflowActionParameters": {
+        "WFURLActionURL": "http://100.70.131.10:5050"
+      }
+    },
+    {
+      "WFWorkflowActionIdentifier": "is.workflow.actions.openurl",
+      "WFWorkflowActionParameters": {
+        "WFInput": {
+          "Value": {
+            "OutputUUID": "previous-action-output",
+            "Type": "ActionOutput"
+          },
+          "WFSerializationType": "WFTextTokenAttachment"
+        }
+      }
+    }
+  ],
+  "WFWorkflowClientVersion": "2605.0.5",
+  "WFWorkflowClientRelease": "18.1",
+  "WFWorkflowMinimumClientVersion": 900,
+  "WFWorkflowMinimumClientRelease": "18.0",
+  "WFWorkflowIcon": {
+    "WFWorkflowIconStartColor": 431817727,
+    "WFWorkflowIconGlyphNumber": 59718
+  },
+  "WFWorkflowTypes": [
+    "NCWidget",
+    "Watch"
+  ],
+  "WFWorkflowInputContentItemClasses": [],
+  "WFWorkflowImportQuestions": [],
+  "WFQuickActionSurfaces": [],
+  "WFWorkflowNoInputBehavior": {
+    "Name": "WFWorkflowNoInputBehaviorAskForInput",
+    "Parameters": {}
+  }
+}

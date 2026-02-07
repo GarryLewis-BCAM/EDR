@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BCAM EDR Status</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="10">
+    <style>
+        body { 
+            background: #1a1a2e; 
+            color: #eee; 
+            font-family: monospace; 
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 { color: #667eea; }
+        h2 { color: #a78bfa; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
+        .stat { 
+            background: #252545; 
+            padding: 15px; 
+            margin: 10px 0; 
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .warning { border-left-color: #f59e0b; }
+        .critical { border-left-color: #ef4444; }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 10px 0;
+            background: #252545;
+        }
+        th, td { 
+            padding: 12px; 
+            text-align: left; 
+            border-bottom: 1px solid #444;
+        }
+        th { 
+            background: #1a1a2e; 
+            color: #a78bfa;
+        }
+        tr:hover { background: #2a2a4e; }
+        .refresh { color: #667eea; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>🛡️ BCAM Hybrid EDR - Live Status</h1>
+    <p class="refresh">Auto-refreshes every 10 seconds | <a href="status.html" style="color: #667eea;">Manual Refresh</a></p>
+    
+    <h2>📊 System Statistics</h2>
+    <div id="stats">Loading...</div>
+    
+    <h2>⚠️ Recent Alerts</h2>
+    <div id="alerts">Loading...</div>
+    
+    <h2>🔍 Suspicious Processes</h2>
+    <div id="processes">Loading...</div>
+    
+    <h2>❤️ System Health</h2>
+    <div id="health">Loading...</div>
+
+    <script>
+        async function loadData() {
+            // Stats
+            try {
+                const stats = await fetch('http://localhost:5050/api/stats').then(r => r.json());
+                document.getElementById('stats').innerHTML = `
+                    <div class="stat">
+                        <strong>Process Events:</strong> ${stats.process_events_count.toLocaleString()}<br>
+                        <strong>Alerts:</strong> ${stats.alerts_count} (${stats.unresolved_alerts} unresolved)<br>
+                        <strong>Database Size:</strong> ${stats.db_size_mb.toFixed(2)} MB<br>
+                        <strong>File Events:</strong> ${stats.file_events_count}<br>
+                        <strong>Network Events:</strong> ${stats.network_events_count}
+                    </div>
+                `;
+            } catch(e) { document.getElementById('stats').innerHTML = '❌ Error loading stats'; }
+
+            // Alerts
+            try {
+                const alerts = await fetch('http://localhost:5050/api/alerts?hours=24').then(r => r.json());
+                if (alerts.count === 0) {
+                    document.getElementById('alerts').innerHTML = '<div class="stat">✅ No alerts in last 24 hours</div>';
+                } else {
+                    let html = '<table><tr><th>Time</th><th>Type</th><th>Severity</th><th>Score</th></tr>';
+                    alerts.alerts.slice(0, 10).forEach(a => {
+                        const time = new Date(a.timestamp * 1000).toLocaleString();
+                        const cls = a.severity === 'critical' ? 'critical' : (a.severity === 'high' ? 'warning' : '');
+                        html += `<tr class="${cls}"><td>${time}</td><td>${a.threat_type}</td><td>${a.severity}</td><td>${a.threat_score}</td></tr>`;
+                    });
+                    html += '</table>';
+                    document.getElementById('alerts').innerHTML = html;
+                }
+            } catch(e) { document.getElementById('alerts').innerHTML = '❌ Error loading alerts'; }
+
+            // Processes
+            try {
+                const procs = await fetch('http://localhost:5050/api/processes/recent?minutes=60&suspicious=true').then(r => r.json());
+                if (procs.count === 0) {
+                    document.getElementById('processes').innerHTML = '<div class="stat">✅ No suspicious processes</div>';
+                } else {
+                    let html = '<table><tr><th>Process</th><th>PID</th><th>CPU%</th><th>Memory MB</th><th>Score</th></tr>';
+                    procs.processes.slice(0, 10).forEach(p => {
+                        const cls = p.suspicious_score >= 70 ? 'critical' : 'warning';
+                        html += `<tr class="${cls}"><td>${p.name}</td><td>${p.pid}</td><td>${p.cpu_percent}</td><td>${p.memory_mb.toFixed(1)}</td><td>${p.suspicious_score}</td></tr>`;
+                    });
+                    html += '</table>';
+                    document.getElementById('processes').innerHTML = html;
+                }
+            } catch(e) { document.getElementById('processes').innerHTML = '❌ Error loading processes'; }
+
+            // Health
+            try {
+                const health = await fetch('http://localhost:5050/api/health').then(r => r.json());
+                document.getElementById('health').innerHTML = `
+                    <div class="stat">
+                        <strong>Status:</strong> ${health.status}<br>
+                        <strong>Collector:</strong> ${health.collector_running ? '✅ Running' : '❌ Stopped'}<br>
+                        <strong>Database:</strong> ${health.database_ok ? '✅ OK' : '❌ Error'}<br>
+                        <strong>NAS:</strong> ${health.nas_connected ? '✅ Connected' : '⚠️ Disconnected'}<br>
+                        <strong>CPU:</strong> ${health.cpu_percent}%<br>
+                        <strong>Memory:</strong> ${health.memory_percent}%
+                    </div>
+                `;
+            } catch(e) { document.getElementById('health').innerHTML = '❌ Error loading health'; }
+        }
+
+        // Load immediately and every 10 seconds
+        loadData();
+        setInterval(loadData, 10000);
+    </script>
+</body>
+</html>

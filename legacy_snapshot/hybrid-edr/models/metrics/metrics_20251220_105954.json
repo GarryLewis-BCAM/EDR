@@ -1,0 +1,79 @@
+{
+  "timestamp": "2025-12-20T10:59:54.885891",
+  "training_time_seconds": 0.882528,
+  "total_samples": 50200,
+  "features": [
+    "cpu_percent",
+    "memory_mb",
+    "num_threads",
+    "connections_count",
+    "parent_pid_norm",
+    "has_network",
+    "is_child"
+  ],
+  "label_distribution": {
+    "benign": 16869,
+    "malicious": 13,
+    "unlabeled": 33318
+  },
+  "models": {
+    "isolation_forest": {
+      "model": "IsolationForest",
+      "total_samples": 50200,
+      "anomalies_detected": 4304,
+      "anomaly_percentage": 8.573705179282868,
+      "mean_anomaly_score": -0.404799229852786,
+      "std_anomaly_score": 0.0857741716812747,
+      "min_anomaly_score": -0.8042373889842519,
+      "max_anomaly_score": -0.3418507176669706
+    },
+    "random_forest": {
+      "model": "RandomForest",
+      "train_samples": 13505,
+      "test_samples": 3377,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0,
+      "confusion_matrix": {
+        "true_negatives": 3374,
+        "false_positives": 0,
+        "false_negatives": 0,
+        "true_positives": 3
+      },
+      "feature_importance": [
+        {
+          "feature": "parent_pid_norm",
+          "importance": 0.3508719037580952
+        },
+        {
+          "feature": "connections_count",
+          "importance": 0.23911343950524594
+        },
+        {
+          "feature": "memory_mb",
+          "importance": 0.22119115103279582
+        },
+        {
+          "feature": "num_threads",
+          "importance": 0.14153030949110348
+        },
+        {
+          "feature": "cpu_percent",
+          "importance": 0.03669204836348059
+        },
+        {
+          "feature": "has_network",
+          "importance": 0.01060114784927892
+        },
+        {
+          "feature": "is_child",
+          "importance": 0.0
+        }
+      ],
+      "roc_auc": 1.0
+    }
+  }
+}

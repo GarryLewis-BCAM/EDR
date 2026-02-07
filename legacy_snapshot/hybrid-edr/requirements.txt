@@ -1,0 +1,26 @@
+# EDR System Requirements
+# Install with: pip install -r requirements.txt
+
+# Core monitoring and system
+psutil>=7.1.3
+watchdog>=6.0.0
+
+# Web framework and dashboard
+flask>=3.1.0
+flask-cors>=6.0.1
+flask-socketio>=5.4.1
+python-socketio>=5.15.0
+simple-websocket>=1.1.0
+
+# Machine Learning
+scikit-learn>=1.6.0
+numpy>=2.3.4
+pandas>=2.3.3
+scipy>=1.15.0
+joblib>=1.4.2
+
+# Data storage and serialization
+pyyaml>=6.0.2
+
+# Network and HTTP
+requests>=2.32.3

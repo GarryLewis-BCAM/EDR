@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Health - {{ system_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #0a0e27;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            background: #1a1f3a !important;
+            border-bottom: 2px solid #2d3561;
+        }
+        
+        .navbar-brand, .nav-link {
+            color: #e0e0e0 !important;
+        }
+        
+        .nav-link:hover {
+            color: #4dabf7 !important;
+        }
+        
+        .card {
+            background: #1a1f3a;
+            border: 1px solid #2d3561;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            background: #2d3561;
+            border-bottom: 1px solid #4dabf7;
+            font-weight: bold;
+        }
+        
+        .status-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-healthy { background: #51cf66; box-shadow: 0 0 10px #51cf66; }
+        .status-warning { background: #ffd43b; box-shadow: 0 0 10px #ffd43b; }
+        .status-error { background: #ff6b6b; box-shadow: 0 0 10px #ff6b6b; }
+        
+        .metric-row {
+            padding: 12px;
+            border-bottom: 1px solid #2d3561;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+        
+        .metric-label {
+            font-weight: 500;
+        }
+        
+        .metric-value {
+            font-family: 'Courier New', monospace;
+            color: #4dabf7;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            padding: 20px;
+            color: white;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .service-card {
+            background: #2d3561;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 12px;
+        }
+        
+        .service-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .service-detail {
+            font-size: 0.85rem;
+            color: #a0a0a0;
+        }
+        
+        .alert-custom {
+            background: #2d3561;
+            border-left: 4px solid #ffd43b;
+            color: #e0e0e0;
+        }
+        
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .stat-value { font-size: 1.5rem; }
+        }
+        
+        /* Dark scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1a1f3a;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #4dabf7;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">🛡️ {{ system_name }}</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item"><a class="nav-link" href="/">Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/network">Network</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/processes">Processes</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/alerts">Alerts</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/ml">ML Training</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/health">Health</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Overall Status -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">💚 Overall System Status</h5>
+                <span id="overallStatus">
+                    <span class="status-indicator status-healthy"></span>
+                    <span>All Systems Operational</span>
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 col-sm-6 mb-3">
+                        <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                            <div class="stat-value" id="uptimeValue">-</div>
+                            <div class="stat-label">Uptime</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6 mb-3">
+                        <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                            <div class="stat-value" id="eventsCollected">-</div>
+                            <div class="stat-label">Events Collected</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6 mb-3">
+                        <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <div class="stat-value" id="dbSize">-</div>
+                            <div class="stat-label">Database Size</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6 mb-3">
+                        <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                            <div class="stat-value" id="alertCount">-</div>
+                            <div class="stat-label">Active Alerts</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Collector Services -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">📡 Collector Services</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="collectorServices">
+                            <div class="text-center p-4">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <p class="mt-2">Loading services...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Resources -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">💻 System Resources</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-row">
+                            <span class="metric-label">CPU Usage</span>
+                            <span class="metric-value" id="cpuUsage">-</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Memory Usage</span>
+                            <span class="metric-value" id="memUsage">-</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Disk Usage</span>
+                            <span class="metric-value" id="diskUsage">-</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Network In/Out</span>
+                            <span class="metric-value" id="networkIO">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Status -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">🗄️ Database Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-row">
+                            <span class="metric-label">Process Events</span>
+                            <span class="metric-value" id="processEvents">-</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Network Events</span>
+                            <span class="metric-value" id="networkEvents">-</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">File Events</span>
+                            <span class="metric-value" id="fileEvents">-</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Database Path</span>
+                            <span class="metric-value small" id="dbPath">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Storage Status -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">💾 Storage Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="service-card">
+                            <div class="service-title">
+                                <span id="nasIndicator" class="status-indicator"></span>
+                                NAS Backup
+                            </div>
+                            <div class="service-detail" id="nasStatus">Checking...</div>
+                        </div>
+                        <div class="service-card">
+                            <div class="service-title">
+                                <span class="status-indicator status-healthy"></span>
+                                Local Database
+                            </div>
+                            <div class="service-detail" id="localDbStatus">~/Security/hybrid-edr/security_events.db</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Network Tracker Mode -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">🌐 Network Monitoring Configuration</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="metric-row">
+                            <span class="metric-label">Tracking Mode</span>
+                            <span class="metric-value" id="trackingMode">-</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Visibility</span>
+                            <span class="metric-value" id="visibility">-</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="alert alert-custom">
+                            <strong>ℹ️ Mode Details:</strong><br>
+                            <span id="modeDetails">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Issues -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">⚠️ Recent Issues & Warnings</h5>
+            </div>
+            <div class="card-body">
+                <div id="recentIssues">
+                    <p class="text-success text-center">✅ No issues detected</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Check if collector is running
+        function checkCollectorStatus() {
+            return fetch('/api/health')
+                .then(r => r.json())
+                .catch(err => {
+                    console.error('Health check error:', err);
+                    return { status: 'error', error: err.message };
+                });
+        }
+
+        // Load all health data
+        function loadHealthData() {
+            checkCollectorStatus().then(data => {
+                if (data.status === 'healthy') {
+                    // Uptime
+                    document.getElementById('uptimeValue').textContent = formatUptime(data.uptime_seconds);
+
+                    // Events
+                    const totalEvents = data.process_events + data.network_events + data.file_events;
+                    document.getElementById('eventsCollected').textContent = totalEvents.toLocaleString();
+                    
+                    // Database
+                    document.getElementById('dbSize').textContent = formatBytes(data.db_size_bytes);
+                    document.getElementById('alertCount').textContent = data.active_alerts || 0;
+
+                    // Collector services
+                    updateCollectorServices(data);
+                    
+                    // System resources
+                    document.getElementById('cpuUsage').textContent = data.cpu_percent ? data.cpu_percent.toFixed(1) + '%' : 'N/A';
+                    document.getElementById('memUsage').textContent = data.memory_mb ? data.memory_mb.toFixed(0) + ' MB' : 'N/A';
+                    document.getElementById('diskUsage').textContent = data.disk_percent ? data.disk_percent.toFixed(1) + '%' : 'N/A';
+                    document.getElementById('networkIO').textContent = 
+                        data.network_bytes_sent && data.network_bytes_recv ? 
+                        `${formatBytes(data.network_bytes_sent)} / ${formatBytes(data.network_bytes_recv)}` : 'N/A';
+
+                    // Database events
+                    document.getElementById('processEvents').textContent = data.process_events.toLocaleString();
+                    document.getElementById('networkEvents').textContent = data.network_events.toLocaleString();
+                    document.getElementById('fileEvents').textContent = data.file_events.toLocaleString();
+                    document.getElementById('dbPath').textContent = data.db_path || '~/Security/hybrid-edr/security_events.db';
+
+                    // NAS status
+                    const nasIndicator = document.getElementById('nasIndicator');
+                    const nasStatus = document.getElementById('nasStatus');
+                    if (data.nas_available) {
+                        nasIndicator.className = 'status-indicator status-healthy';
+                        nasStatus.textContent = `✓ Connected - ${data.nas_backup_path || 'NAS backup enabled'}`;
+                    } else {
+                        nasIndicator.className = 'status-indicator status-warning';
+                        nasStatus.textContent = '⚠ NAS unavailable - Using local storage only';
+                    }
+
+                    // Network tracking mode
+                    const trackingMode = data.network_tracker_mode || 'psutil (standard)';
+                    document.getElementById('trackingMode').textContent = trackingMode;
+                    
+                    if (trackingMode.includes('native')) {
+                        document.getElementById('visibility').textContent = 'System-wide (lsof)';
+                        document.getElementById('modeDetails').textContent = 
+                            'Using macOS native lsof for full system visibility without root. Detects all connections including system processes.';
+                    } else {
+                        document.getElementById('visibility').textContent = 'User processes (psutil)';
+                        document.getElementById('modeDetails').textContent = 
+                            'Using psutil with per-process enumeration. Tracks user processes and handles AccessDenied gracefully.';
+                    }
+
+                    // Recent issues
+                    if (data.recent_issues && data.recent_issues.length > 0) {
+                        const issuesHtml = data.recent_issues.map(issue => `
+                            <div class="alert alert-warning">
+                                <strong>${issue.timestamp}:</strong> ${issue.message}
+                            </div>
+                        `).join('');
+                        document.getElementById('recentIssues').innerHTML = issuesHtml;
+                    }
+                } else {
+                    // Error state
+                    document.getElementById('overallStatus').innerHTML = `
+                        <span class="status-indicator status-error"></span>
+                        <span>Service Unavailable</span>
+                    `;
+                    document.getElementById('collectorServices').innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>⚠️ Collector Offline</strong><br>
+                            The EDR collector is not responding. Please check the service.
+                        </div>
+                    `;
+                }
+            });
+        }
+
+        // Update collector services
+        function updateCollectorServices(data) {
+            const html = `
+                <div class="service-card">
+                    <div class="service-title">
+                        <span class="status-indicator status-healthy"></span>
+                        EDR Collector
+                    </div>
+                    <div class="service-detail">
+                        PID: ${data.collector_pid || 'N/A'} • 
+                        Uptime: ${formatUptime(data.uptime_seconds)} • 
+                        Version: ${data.version || '2.0'}
+                    </div>
+                </div>
+                <div class="service-card">
+                    <div class="service-title">
+                        <span class="status-indicator ${data.network_tracker_running ? 'status-healthy' : 'status-warning'}"></span>
+                        Network Tracker
+                    </div>
+                    <div class="service-detail">
+                        Mode: ${data.network_tracker_mode || 'psutil'} • 
+                        Events/min: ${data.network_events_per_minute || 0}
+                    </div>
+                </div>
+                <div class="service-card">
+                    <div class="service-title">
+                        <span class="status-indicator ${data.process_monitor_running ? 'status-healthy' : 'status-warning'}"></span>
+                        Process Monitor
+                    </div>
+                    <div class="service-detail">
+                        Active: ${data.process_count || 0} processes • 
+                        Events/min: ${data.process_events_per_minute || 0}
+                    </div>
+                </div>
+                <div class="service-card">
+                    <div class="service-title">
+                        <span class="status-indicator ${data.ml_model_loaded ? 'status-healthy' : 'status-warning'}"></span>
+                        ML Model
+                    </div>
+                    <div class="service-detail">
+                        ${data.ml_model_loaded ? `Loaded • Accuracy: ${(data.ml_accuracy * 100).toFixed(1)}%` : 'Not loaded • Training required'}
+                    </div>
+                </div>
+            `;
+            document.getElementById('collectorServices').innerHTML = html;
+        }
+
+        // Format bytes
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Format uptime
+        function formatUptime(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (days > 0) return `${days}d ${hours}h`;
+            if (hours > 0) return `${hours}h ${minutes}m`;
+            return `${minutes}m`;
+        }
+
+        // Initialize
+        loadHealthData();
+
+        // Auto-refresh every 15 seconds
+        setInterval(loadHealthData, 15000);
+    </script>
+</body>
+</html>

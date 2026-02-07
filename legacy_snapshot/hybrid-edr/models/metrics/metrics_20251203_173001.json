@@ -1,0 +1,79 @@
+{
+  "timestamp": "2025-12-03T17:30:01.933966",
+  "training_time_seconds": 35.460052,
+  "total_samples": 1868124,
+  "features": [
+    "cpu_percent",
+    "memory_mb",
+    "num_threads",
+    "connections_count",
+    "parent_pid_norm",
+    "has_network",
+    "is_child"
+  ],
+  "label_distribution": {
+    "benign": 1252933,
+    "malicious": 1950,
+    "unlabeled": 613241
+  },
+  "models": {
+    "isolation_forest": {
+      "model": "IsolationForest",
+      "total_samples": 1868124,
+      "anomalies_detected": 186806,
+      "anomaly_percentage": 9.999657410321799,
+      "mean_anomaly_score": -0.36026202495899473,
+      "std_anomaly_score": 0.10022866395027162,
+      "min_anomaly_score": -0.8518447758913267,
+      "max_anomaly_score": -0.30707703539733794
+    },
+    "random_forest": {
+      "model": "RandomForest",
+      "train_samples": 1003906,
+      "test_samples": 250977,
+      "accuracy": 0.998537714611299,
+      "precision": 1.0,
+      "recall": 0.05897435897435897,
+      "f1_score": 0.11138014527845036,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.941025641025641,
+      "confusion_matrix": {
+        "true_negatives": 250587,
+        "false_positives": 0,
+        "false_negatives": 367,
+        "true_positives": 23
+      },
+      "feature_importance": [
+        {
+          "feature": "memory_mb",
+          "importance": 0.7550420470770769
+        },
+        {
+          "feature": "num_threads",
+          "importance": 0.1215289022299734
+        },
+        {
+          "feature": "parent_pid_norm",
+          "importance": 0.05315935400134033
+        },
+        {
+          "feature": "cpu_percent",
+          "importance": 0.046034172028556114
+        },
+        {
+          "feature": "connections_count",
+          "importance": 0.02265327046589652
+        },
+        {
+          "feature": "has_network",
+          "importance": 0.0015822541971568325
+        },
+        {
+          "feature": "is_child",
+          "importance": 0.0
+        }
+      ],
+      "roc_auc": 0.9586431264519114
+    }
+  }
+}

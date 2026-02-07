@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Training - {{ system_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        body {
+            background: #0a0e27;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            background: #1a1f3a !important;
+            border-bottom: 2px solid #2d3561;
+        }
+        
+        .navbar-brand, .nav-link {
+            color: #e0e0e0 !important;
+        }
+        
+        .nav-link:hover {
+            color: #4dabf7 !important;
+        }
+        
+        .card {
+            background: #1a1f3a;
+            border: 1px solid #2d3561;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            background: #2d3561;
+            border-bottom: 1px solid #4dabf7;
+            font-weight: bold;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            padding: 20px;
+            color: white;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .btn-train {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            font-weight: bold;
+            padding: 12px 30px;
+            border-radius: 8px;
+            transition: transform 0.2s;
+        }
+        
+        .btn-train:hover {
+            transform: scale(1.05);
+            color: white;
+        }
+        
+        .btn-train:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .status-badge {
+            padding: 6px 16px;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        
+        .status-ready { background: #51cf66; color: #000; }
+        .status-training { background: #ffd43b; color: #000; }
+        .status-error { background: #ff6b6b; color: #fff; }
+        .status-nodata { background: #868e96; color: #fff; }
+        
+        .feature-item {
+            padding: 10px;
+            background: #2d3561;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .training-log {
+            background: #000;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .stat-value { font-size: 1.8rem; }
+        }
+        
+        /* Dark scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1a1f3a;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #4dabf7;
+            border-radius: 5px;
+        }
+        
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+        }
+        
+        .custom-toast {
+            min-width: 300px;
+            background: #1a1f3a;
+            border: 2px solid;
+            border-radius: 10px;
+            color: #e0e0e0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            margin-bottom: 10px;
+        }
+        
+        .custom-toast.success { border-color: #51cf66; }
+        .custom-toast.info { border-color: #4dabf7; }
+        .custom-toast.warning { border-color: #ffd43b; }
+        .custom-toast.error { border-color: #ff6b6b; }
+        
+        .toast-header {
+            background: #2d3561;
+            border-bottom: 1px solid #4dabf7;
+        }
+        
+        .toast-body {
+            padding: 15px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+    
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">🛡️ {{ system_name }}</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item"><a class="nav-link" href="/">Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/network">Network</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/processes">Processes</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/alerts">Alerts</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/ml">ML Training</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/health">Health</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Status and Controls -->
+        <div class="row mb-4">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">🤖 Model Status</h5>
+                        <span id="modelStatus" class="status-badge status-nodata">Loading...</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 col-sm-6 mb-3">
+                                <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                                    <div class="stat-value" id="trainingEvents">-</div>
+                                    <div class="stat-label">Training Events</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-sm-6 mb-3">
+                                <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                                    <div class="stat-value" id="modelAccuracy">-</div>
+                                    <div class="stat-label">Accuracy</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-sm-6 mb-3">
+                                <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                                    <div class="stat-value" id="falsePositives">-</div>
+                                    <div class="stat-label">False Positive Rate</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-sm-6 mb-3">
+                                <div class="stat-card" style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);">
+                                    <div class="stat-value" id="lastTrained">-</div>
+                                    <div class="stat-label">Last Trained</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3 text-center">
+                            <button id="trainBtn" class="btn btn-train" onclick="startTraining()">
+                                <span id="trainBtnText">🚀 Start Training</span>
+                                <span id="trainSpinner" class="spinner-border spinner-border-sm ms-2" style="display: none;"></span>
+                            </button>
+                        </div>
+                        <div id="trainingProgress" class="mt-3" style="display: none;">
+                            <div class="progress" style="height: 25px;">
+                                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">📊 Training Dataset</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <strong>Process Events:</strong>
+                            <span id="processCount" class="float-end text-info">-</span>
+                        </div>
+                        <div class="mb-3">
+                            <strong>Network Events:</strong>
+                            <span id="networkCount" class="float-end text-info">-</span>
+                        </div>
+                        <div class="mb-3">
+                            <strong>File Events:</strong>
+                            <span id="fileCount" class="float-end text-info">-</span>
+                        </div>
+                        <div class="mb-3">
+                            <strong>Known Malicious:</strong>
+                            <span id="maliciousCount" class="float-end text-danger">-</span>
+                        </div>
+                        <div class="mb-3">
+                            <strong>Benign:</strong>
+                            <span id="benignCount" class="float-end text-success">-</span>
+                        </div>
+                        <hr>
+                        <div class="small text-muted">
+                            <p>✓ Minimum 1000 events required</p>
+                            <p>✓ Balanced dataset recommended</p>
+                            <p>✓ Features: process behavior, network patterns, file operations</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Training Metrics -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">📈 Training Metrics</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="metricsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">🎯 Feature Importance</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="featureChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Training Log -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">📝 Training Log</h5>
+            </div>
+            <div class="card-body">
+                <div id="trainingLog" class="training-log">
+                    <p>[System] Waiting for training to start...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detected Features -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">🔍 Extracted Features</h5>
+            </div>
+            <div class="card-body">
+                <div id="featuresList" class="row"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let metricsChart, featureChart;
+        let trainingInterval;
+
+        // Initialize charts
+        function initCharts() {
+            const ctx1 = document.getElementById('metricsChart').getContext('2d');
+            metricsChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Accuracy',
+                        data: [],
+                        borderColor: '#51cf66',
+                        backgroundColor: 'rgba(81, 207, 102, 0.1)',
+                        tension: 0.4
+                    }, {
+                        label: 'Precision',
+                        data: [],
+                        borderColor: '#4dabf7',
+                        backgroundColor: 'rgba(77, 171, 247, 0.1)',
+                        tension: 0.4
+                    }, {
+                        label: 'Recall',
+                        data: [],
+                        borderColor: '#ff8787',
+                        backgroundColor: 'rgba(255, 135, 135, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { labels: { color: '#e0e0e0' } }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 1,
+                            ticks: { color: '#e0e0e0' },
+                            grid: { color: '#2d3561' }
+                        },
+                        x: {
+                            ticks: { color: '#e0e0e0' },
+                            grid: { color: '#2d3561' }
+                        }
+                    }
+                }
+            });
+
+            const ctx2 = document.getElementById('featureChart').getContext('2d');
+            featureChart = new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: ['CPU %', 'Memory MB', 'Thread Count', 'Network Connections', 'File Operations', 'Parent Process', 'Execution Time', 'Network Bytes'],
+                    datasets: [{
+                        label: 'Importance',
+                        data: [0, 0, 0, 0, 0, 0, 0, 0],
+                        backgroundColor: [
+                            'rgba(102, 126, 234, 0.8)',
+                            'rgba(77, 171, 247, 0.8)',
+                            'rgba(81, 207, 102, 0.8)',
+                            'rgba(255, 215, 59, 0.8)',
+                            'rgba(255, 135, 135, 0.8)',
+                            'rgba(240, 147, 251, 0.8)',
+                            'rgba(67, 233, 123, 0.8)',
+                            'rgba(255, 107, 107, 0.8)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#e0e0e0' },
+                            grid: { color: '#2d3561' }
+                        },
+                        y: {
+                            ticks: { color: '#e0e0e0' },
+                            grid: { color: '#2d3561' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Load status
+        function loadStatus() {
+            fetch('/api/ml/status')
+                .then(r => r.json())
+                .then(data => {
+                    // Status badge
+                    const statusEl = document.getElementById('modelStatus');
+                    if (data.is_training) {
+                        statusEl.className = 'status-badge status-training';
+                        statusEl.textContent = 'Training...';
+                    } else if (data.ready_to_train) {
+                        statusEl.className = 'status-badge status-ready';
+                        statusEl.textContent = 'Ready';
+                    } else {
+                        statusEl.className = 'status-badge status-nodata';
+                        statusEl.textContent = 'Not Ready';
+                    }
+
+                    // Stats
+                    document.getElementById('trainingEvents').textContent = (data.process_events + data.network_events).toLocaleString();
+                    document.getElementById('modelAccuracy').textContent = data.model_accuracy ? (data.model_accuracy * 100).toFixed(1) + '%' : 'N/A';
+                    document.getElementById('falsePositives').textContent = data.false_positive_rate ? (data.false_positive_rate * 100).toFixed(2) + '%' : 'N/A';
+                    document.getElementById('lastTrained').textContent = data.last_training ? new Date(data.last_training * 1000).toLocaleDateString() : 'Never';
+
+                    // Dataset
+                    document.getElementById('processCount').textContent = data.process_events.toLocaleString();
+                    document.getElementById('networkCount').textContent = data.network_events.toLocaleString();
+                    document.getElementById('fileCount').textContent = data.file_events.toLocaleString();
+                    document.getElementById('maliciousCount').textContent = data.labeled_malicious || 0;
+                    document.getElementById('benignCount').textContent = data.labeled_benign || 0;
+
+                    // Train button
+                    const trainBtn = document.getElementById('trainBtn');
+                    trainBtn.disabled = !data.ready_to_train || data.is_training;
+
+                    // Update charts with historical data if available
+                    if (data.training_history && data.training_history.length > 0) {
+                        updateChartsWithHistory(data.training_history);
+                    }
+
+                    // Update feature importance
+                    if (data.feature_importance) {
+                        updateFeatureChart(data.feature_importance);
+                    }
+                })
+                .catch(err => console.error('Status error:', err));
+        }
+
+        // Show toast notification
+        function showToast(message, type = 'info', duration = 5000) {
+            const container = document.getElementById('toastContainer');
+            const toastId = 'toast-' + Date.now();
+            
+            const icons = {
+                success: '✅',
+                info: 'ℹ️',
+                warning: '⚠️',
+                error: '❌'
+            };
+            
+            const toast = document.createElement('div');
+            toast.id = toastId;
+            toast.className = `custom-toast ${type}`;
+            toast.innerHTML = `
+                <div class="toast-header">
+                    <strong>${icons[type]} ${type.toUpperCase()}</strong>
+                    <button type="button" class="btn-close btn-close-white ms-auto" onclick="document.getElementById('${toastId}').remove()"></button>
+                </div>
+                <div class="toast-body">${message}</div>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Fade in
+            setTimeout(() => toast.style.opacity = '1', 10);
+            
+            // Auto-remove after duration
+            if (duration > 0) {
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    setTimeout(() => toast.remove(), 300);
+                }, duration);
+            }
+        }
+        
+        // Play completion sound
+        function playCompletionSound() {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 800;
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        }
+        
+        // Start training
+        function startTraining() {
+            const btn = document.getElementById('trainBtn');
+            const btnText = document.getElementById('trainBtnText');
+            const spinner = document.getElementById('trainSpinner');
+            const progress = document.getElementById('trainingProgress');
+            
+            btn.disabled = true;
+            btnText.textContent = '⏳ Training...';
+            spinner.style.display = 'inline-block';
+            progress.style.display = 'block';
+
+            addLogLine('[System] Initiating model training...');
+            showToast('Training started! This may take a few minutes...', 'info', 3000);
+
+            fetch('/api/ml/train', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'started') {
+                        addLogLine('[Training] ' + data.message);
+                        showToast('Model training in progress...', 'success', 3000);
+                        // Start polling for progress
+                        trainingInterval = setInterval(pollTrainingProgress, 2000);
+                    } else {
+                        addLogLine('[Error] ' + data.message);
+                        showToast('Training failed: ' + data.message, 'error', 5000);
+                        resetTrainingUI();
+                    }
+                })
+                .catch(err => {
+                    const errorMsg = 'Failed to start training: ' + err.message;
+                    addLogLine('[Error] ' + errorMsg);
+                    showToast(errorMsg, 'error', 5000);
+                    resetTrainingUI();
+                });
+        }
+
+        // Poll training progress
+        function pollTrainingProgress() {
+            fetch('/api/ml/status')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.is_training) {
+                        clearInterval(trainingInterval);
+                        addLogLine('[Completed] Training finished!');
+                        
+                        const accuracy = (data.model_accuracy * 100).toFixed(2);
+                        const fpRate = (data.false_positive_rate * 100).toFixed(2);
+                        addLogLine(`[Results] Accuracy: ${accuracy}%, FP Rate: ${fpRate}%`);
+                        
+                        // Show completion notifications
+                        showToast(
+                            `🎉 Training complete!<br>🎯 Accuracy: ${accuracy}%<br>⚠️ False Positive Rate: ${fpRate}%`,
+                            'success',
+                            8000
+                        );
+                        
+                        // Play completion sound
+                        try {
+                            playCompletionSound();
+                        } catch (err) {
+                            console.log('Audio not available:', err);
+                        }
+                        
+                        resetTrainingUI();
+                        loadStatus();
+                    } else {
+                        // Update progress bar
+                        const progress = Math.min(data.training_progress || 0, 100);
+                        updateProgressBar(progress);
+                        
+                        // Show progress toast every 20% milestone
+                        if (progress % 20 === 0 && progress > 0) {
+                            showToast(`Training progress: ${progress}%`, 'info', 2000);
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.error('Progress poll error:', err);
+                    showToast('Error checking training status', 'error', 3000);
+                });
+        }
+
+        // Reset UI after training
+        function resetTrainingUI() {
+            const btn = document.getElementById('trainBtn');
+            const btnText = document.getElementById('trainBtnText');
+            const spinner = document.getElementById('trainSpinner');
+            const progress = document.getElementById('trainingProgress');
+            
+            btn.disabled = false;
+            btnText.textContent = '🚀 Start Training';
+            spinner.style.display = 'none';
+            progress.style.display = 'none';
+        }
+
+        // Update progress bar
+        function updateProgressBar(percent) {
+            const bar = document.getElementById('progressBar');
+            bar.style.width = percent + '%';
+            bar.textContent = Math.round(percent) + '%';
+        }
+
+        // Add log line
+        function addLogLine(text) {
+            const log = document.getElementById('trainingLog');
+            const timestamp = new Date().toLocaleTimeString();
+            log.innerHTML += `\n[${timestamp}] ${text}`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Update charts with historical data
+        function updateChartsWithHistory(history) {
+            metricsChart.data.labels = history.map((_, i) => `Epoch ${i + 1}`);
+            metricsChart.data.datasets[0].data = history.map(h => h.accuracy);
+            metricsChart.data.datasets[1].data = history.map(h => h.precision);
+            metricsChart.data.datasets[2].data = history.map(h => h.recall);
+            metricsChart.update();
+        }
+
+        // Update feature chart
+        function updateFeatureChart(importance) {
+            featureChart.data.datasets[0].data = importance;
+            featureChart.update();
+        }
+
+        // Initialize
+        initCharts();
+        loadStatus();
+
+        // Auto-refresh every 10 seconds
+        setInterval(loadStatus, 10000);
+    </script>
+</body>
+</html>

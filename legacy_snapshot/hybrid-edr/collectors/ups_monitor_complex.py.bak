@@ -1,0 +1,438 @@
+"""
+UPS Monitor Collector for BCAM EDR
+Monitors APC Back-UPS via USB HID, tracks power events, battery status
+Integrates with EDR alerting system for power failure notifications
+"""
+import time
+import usb.core
+import usb.util
+from typing import Dict, List, Optional
+from datetime import datetime
+import subprocess
+
+
+class UPSMonitor:
+    """Monitor APC UPS via USB HID - Direct hardware communication"""
+    
+    # APC vendor/product IDs
+    APC_VENDOR_ID = 0x051d
+    APC_PRODUCT_IDS = [0x0002, 0x0003]  # Common APC Back-UPS product IDs
+    
+    def __init__(self, config: dict, logger, db):
+        self.config = config
+        self.logger = logger
+        self.db = db
+        self.ups_device = None
+        self.last_status = {}
+        self.connection_failures = 0
+        self.max_failures = 5
+        
+        # Configuration
+        ups_config = config['collection'].get('ups_monitor', {})
+        self.enabled = ups_config.get('enabled', True)
+        self.poll_interval = ups_config.get('poll_interval', 30)
+        self.battery_warning_threshold = ups_config.get('battery_thresholds', {}).get('warning', 50)
+        self.battery_critical_threshold = ups_config.get('battery_thresholds', {}).get('critical', 20)
+        
+        # State tracking
+        self.on_battery = False
+        self.last_battery_warning = 0
+        self.last_critical_warning = 0
+        self.warning_cooldown = 300  # 5 minutes between duplicate warnings
+        
+        self.logger.info("UPS Monitor initialized - will attempt USB connection on first collection")
+    
+    def _connect_ups(self) -> bool:
+        """Find and connect to APC UPS via USB"""
+        try:
+            # Try to find APC UPS
+            self.ups_device = usb.core.find(
+                idVendor=self.APC_VENDOR_ID,
+                idProduct=lambda x: x in self.APC_PRODUCT_IDS
+            )
+            
+            if self.ups_device is None:
+                # Fallback: try any APC device
+                self.ups_device = usb.core.find(idVendor=self.APC_VENDOR_ID)
+            
+            if self.ups_device is None:
+                self.connection_failures += 1
+                if self.connection_failures <= 3:  # Only log first few failures
+                    self.logger.warning("APC UPS not found via USB - is it connected?")
+                return False
+            
+            # Try to set configuration (may require privileges)
+            try:
+                self.ups_device.set_configuration()
+            except usb.core.USBError as e:
+                # This is common on macOS - we can still try to read without setting config
+                self.logger.debug(f"Could not set USB configuration (normal on macOS): {e}")
+            
+            self.connection_failures = 0
+            self.logger.info(f"✓ Connected to APC UPS: {self.ups_device.product} (via USB)")
+            return True
+            
+        except Exception as e:
+            self.connection_failures += 1
+            if self.connection_failures <= 3:
+                self.logger.error(f"Failed to connect to UPS: {e}")
+            return False
+    
+    def _get_ups_status_via_ioreg(self) -> Optional[Dict]:
+        """Fallback: Get UPS status from macOS ioreg (IOKit)"""
+        try:
+            # Use ioreg to query USB UPS device
+            result = subprocess.run(
+                ['ioreg', '-r', '-c', 'IOUSBDevice', '-l'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode != 0:
+                return None
+            
+            # Parse ioreg output for APC UPS
+            lines = result.stdout.split('\n')
+            in_ups_section = False
+            ups_data = {}
+            
+            for line in lines:
+                if 'Back-UPS' in line or 'APC' in line:
+                    in_ups_section = True
+                elif in_ups_section and '+-o' in line:
+                    # End of UPS section
+                    break
+                elif in_ups_section:
+                    # Extract key-value pairs
+                    if '=' in line:
+                        parts = line.split('=', 1)
+                        if len(parts) == 2:
+                            key = parts[0].strip().strip('"')
+                            value = parts[1].strip().strip('"').strip()
+                            ups_data[key] = value
+            
+            if ups_data:
+                # IOKit provides basic connection info, not battery status
+                # We'll return connection status
+                return {
+                    'connected': True,
+                    'device_name': ups_data.get('USB Product Name', 'Unknown UPS'),
+                    'vendor': 'APC',
+                    'status': 'online',  # Assume online if connected
+                    'source': 'ioreg'
+                }
+            
+            return None
+            
+        except Exception as e:
+            self.logger.debug(f"ioreg fallback failed: {e}")
+            return None
+    
+    def _read_ups_status_via_nut_cli(self) -> Optional[Dict]:
+        """Read UPS status using NUT command-line tools (most reliable)"""
+        try:
+            # Use nut-scanner to detect UPS and get data
+            result = subprocess.run(
+                ['sudo', '/opt/homebrew/bin/nut-scanner', '-U', '--timeout=2'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode != 0 or not result.stdout:
+                self.logger.debug("nut-scanner failed, trying upsc")
+                # Fallback: try upsc if NUT daemon is running
+                result = subprocess.run(
+                    ['/opt/homebrew/bin/upsc', 'apc_bx1600@localhost'],
+                    capture_output=True,
+                    text=True,
+                    timeout=3
+                )
+                if result.returncode == 0:
+                    return self._parse_upsc_output(result.stdout)
+                return None
+            
+            # Parse nut-scanner output
+            # Format: device.type = "ups"
+            #         driver = "usbhid-ups"
+            #         port = "auto"
+            #         vendorid = "051D"
+            #         etc.
+            
+            lines = result.stdout.split('\n')
+            ups_data = {}
+            for line in lines:
+                if '=' in line:
+                    parts = line.split('=', 1)
+                    if len(parts) == 2:
+                        key = parts[0].strip()
+                        value = parts[1].strip().strip('"')
+                        ups_data[key] = value
+            
+            if ups_data:
+                return {
+                    'timestamp': time.time(),
+                    'connected': True,
+                    'vendor': ups_data.get('vendor', 'APC'),
+                    'model': ups_data.get('product', 'Unknown'),
+                    'serial': ups_data.get('serial', 'Unknown'),
+                    'status': 'online',  # nut-scanner doesn't give status
+                    'battery_charge': None,  # Need upsc for this
+                    'runtime_minutes': None,
+                    'load_percent': None,
+                    'on_battery': False,
+                    'low_battery': False,
+                    'replace_battery': False,
+                    'source': 'nut-scanner'
+                }
+            
+            return None
+            
+        except subprocess.TimeoutExpired:
+            self.logger.debug("NUT CLI timeout")
+            return None
+        except Exception as e:
+            self.logger.debug(f"NUT CLI error: {e}")
+            return None
+    
+    def _parse_upsc_output(self, output: str) -> Dict:
+        """Parse upsc command output to extract UPS metrics"""
+        status = {
+            'timestamp': time.time(),
+            'connected': True,
+            'vendor': 'APC',
+            'model': 'Unknown',
+            'status': 'online',
+            'battery_charge': None,
+            'runtime_minutes': None,
+            'load_percent': None,
+            'on_battery': False,
+            'low_battery': False,
+            'replace_battery': False,
+            'source': 'upsc'
+        }
+        
+        for line in output.split('\n'):
+            if ':' not in line:
+                continue
+            
+            key, value = line.split(':', 1)
+            key = key.strip()
+            value = value.strip()
+            
+            # Parse useful fields
+            if key == 'battery.charge':
+                try:
+                    status['battery_charge'] = float(value)
+                except ValueError:
+                    pass
+            elif key == 'battery.runtime':
+                try:
+                    status['runtime_minutes'] = float(value) / 60  # Convert seconds to minutes
+                except ValueError:
+                    pass
+            elif key == 'ups.load':
+                try:
+                    status['load_percent'] = float(value)
+                except ValueError:
+                    pass
+            elif key == 'ups.status':
+                # Status values: OL (online), OB (on battery), LB (low battery)
+                if 'OB' in value:
+                    status['on_battery'] = True
+                    status['status'] = 'on_battery'
+                if 'LB' in value:
+                    status['low_battery'] = True
+                if 'RB' in value:  # Replace battery
+                    status['replace_battery'] = True
+            elif key == 'ups.model':
+                status['model'] = value
+            elif key == 'device.serial':
+                status['serial'] = value
+        
+        return status
+    
+    def _read_ups_status(self) -> Optional[Dict]:
+        """Read current UPS status - tries multiple methods"""
+        
+        # Method 1: Try NUT CLI tools (most reliable)
+        status = self._read_ups_status_via_nut_cli()
+        if status:
+            return status
+        
+        # Method 2: Fallback to ioreg for basic connection status
+        return self._get_ups_status_via_ioreg()
+    
+    def collect(self) -> List[Dict]:
+        """Collect UPS status and generate events"""
+        
+        if not self.enabled:
+            return []
+        
+        events = []
+        
+        try:
+            status = self._read_ups_status()
+            
+            if not status:
+                # UPS not available
+                if self.connection_failures == self.max_failures:
+                    self.logger.warning(
+                        f"UPS connection lost after {self.max_failures} attempts. "
+                        "Check USB connection and permissions."
+                    )
+                return []
+            
+            # Detect status changes
+            status_changed = self._detect_status_changes(status)
+            
+            # Create event
+            event = {
+                'timestamp': status['timestamp'],
+                'event_type': 'ups_status',
+                'status': status['status'],
+                'battery_charge': status.get('battery_charge'),
+                'runtime_minutes': status.get('runtime_minutes'),
+                'load_percent': status.get('load_percent'),
+                'on_battery': status.get('on_battery', False),
+                'low_battery': status.get('low_battery', False),
+                'replace_battery': status.get('replace_battery', False),
+                'connected': status.get('connected', True),
+                'device_name': status.get('model', 'Unknown'),
+                'alert_triggered': False
+            }
+            
+            # Store in database
+            self.db.insert_ups_event(event)
+            
+            # Check for alert conditions
+            if status_changed:
+                alert_event = self._check_alert_conditions(status, status_changed)
+                if alert_event:
+                    events.append(alert_event)
+                    event['alert_triggered'] = True
+            
+            events.append(event)
+            self.last_status = status
+            
+        except Exception as e:
+            self.logger.error(f"UPS collection error: {e}")
+        
+        return events
+    
+    def _detect_status_changes(self, current_status: Dict) -> Dict:
+        """Detect changes in UPS status"""
+        changes = {}
+        
+        if not self.last_status:
+            return changes
+        
+        # Check for power status change
+        if current_status.get('on_battery') != self.last_status.get('on_battery'):
+            changes['power_status'] = {
+                'old': 'battery' if self.last_status.get('on_battery') else 'online',
+                'new': 'battery' if current_status.get('on_battery') else 'online'
+            }
+        
+        # Check for battery level changes
+        current_charge = current_status.get('battery_charge')
+        last_charge = self.last_status.get('battery_charge')
+        
+        if current_charge and last_charge and abs(current_charge - last_charge) > 5:
+            changes['battery_charge'] = {
+                'old': last_charge,
+                'new': current_charge
+            }
+        
+        # Check for low battery condition
+        if current_status.get('low_battery') and not self.last_status.get('low_battery'):
+            changes['low_battery'] = True
+        
+        # Check for replace battery condition
+        if current_status.get('replace_battery') and not self.last_status.get('replace_battery'):
+            changes['replace_battery'] = True
+        
+        return changes
+    
+    def _check_alert_conditions(self, status: Dict, changes: Dict) -> Optional[Dict]:
+        """Check if we should send alerts"""
+        from utils.alerting import Alert, AlertPriority
+        
+        current_time = time.time()
+        
+        # Alert on power status change
+        if 'power_status' in changes:
+            if changes['power_status']['new'] == 'battery':
+                # Power failed, switched to battery
+                self.on_battery = True
+                return {
+                    'type': 'power_failure',
+                    'priority': AlertPriority.HIGH,
+                    'title': '⚠️ Power Failure',
+                    'message': f"UPS switched to battery power. {status.get('runtime_minutes', '?')} minutes runtime remaining.",
+                    'status': status
+                }
+            else:
+                # Power restored
+                self.on_battery = False
+                return {
+                    'type': 'power_restored',
+                    'priority': AlertPriority.LOW,
+                    'title': '✅ Power Restored',
+                    'message': f"Utility power restored. UPS charging ({status.get('battery_charge', '?')}%).",
+                    'status': status
+                }
+        
+        # Alert on low battery (with cooldown)
+        battery_charge = status.get('battery_charge')
+        if battery_charge:
+            if battery_charge <= self.battery_critical_threshold:
+                if current_time - self.last_critical_warning > self.warning_cooldown:
+                    self.last_critical_warning = current_time
+                    return {
+                        'type': 'battery_critical',
+                        'priority': AlertPriority.CRITICAL,
+                        'title': '🔴 CRITICAL: UPS Battery Low',
+                        'message': f"Battery at {battery_charge}%! System will shutdown soon. Runtime: {status.get('runtime_minutes', '?')} min.",
+                        'status': status
+                    }
+            elif battery_charge <= self.battery_warning_threshold:
+                if current_time - self.last_battery_warning > self.warning_cooldown:
+                    self.last_battery_warning = current_time
+                    return {
+                        'type': 'battery_warning',
+                        'priority': AlertPriority.MEDIUM,
+                        'title': '⚠️ UPS Battery Low',
+                        'message': f"Battery at {battery_charge}%. Runtime: {status.get('runtime_minutes', '?')} min.",
+                        'status': status
+                    }
+        
+        # Alert on replace battery condition
+        if changes.get('replace_battery'):
+            return {
+                'type': 'battery_replace',
+                'priority': AlertPriority.MEDIUM,
+                'title': '🔋 UPS Battery Needs Replacement',
+                'message': 'UPS reports battery needs replacement. Schedule maintenance.',
+                'status': status
+            }
+        
+        return None
+    
+    def get_status(self) -> Dict:
+        """Get current UPS status (for dashboard/queries)"""
+        if self.last_status:
+            return self.last_status
+        
+        # Try to read current status
+        status = self._read_ups_status()
+        if status:
+            self.last_status = status
+            return status
+        
+        return {
+            'connected': False,
+            'status': 'unavailable',
+            'message': 'UPS not connected or not accessible'
+        }

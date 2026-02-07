@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: edr-ollama
+    volumes:
+      - /volume1/Docker/edr/ollama-data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+
+  edr-collector:
+    image: python:3.11-slim
+    container_name: edr-collector
+    working_dir: /app
+    volumes:
+      - /volume1/Docker/edr:/app
+      - /volume1/Docker/edr/data:/app/data
+    command: >
+      sh -c "pip install --quiet psutil pyyaml requests twilio ollama &&
+             python3 edr_collector_nas.py"
+    environment:
+      - OLLAMA_URL=http://edr-ollama:11434
+      - TWILIO_ACCOUNT_SID=dummy
+      - TWILIO_AUTH_TOKEN=dummy  
+      - TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+      - TWILIO_WHATSAPP_TO=whatsapp:+1234567890
+    depends_on:
+      - ollama
+    restart: unless-stopped

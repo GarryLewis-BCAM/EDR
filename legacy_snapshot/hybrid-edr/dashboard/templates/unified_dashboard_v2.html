@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ system_name }} - Security Operations Center</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #000000;
+            color: #00ff41;
+            font-family: 'Rajdhani', sans-serif;
+            overflow-x: hidden;
+        }
+        
+        /* Matrix Rain Background */
+        #matrix-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0.15;
+        }
+        
+        /* Main Container */
+        .dashboard-container {
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Cyberpunk Header */
+        .cyber-header {
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            border-bottom: 2px solid #00ff41;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+            padding: 15px 30px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+        
+        .cyber-logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #00ff41 0%, #00d4ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(0, 255, 65, 0.5);
+            letter-spacing: 3px;
+        }
+        
+        .cyber-logo i {
+            color: #00ff41;
+            text-shadow: 0 0 20px #00ff41;
+            -webkit-text-fill-color: #00ff41;
+        }
+        
+        .status-badge {
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+            border: 2px solid;
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+        
+        .status-online {
+            background: rgba(0, 255, 65, 0.1);
+            border-color: #00ff41;
+            color: #00ff41;
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
+        }
+        
+        .status-offline {
+            background: rgba(255, 0, 68, 0.1);
+            border-color: #ff0044;
+            color: #ff0044;
+            box-shadow: 0 0 15px rgba(255, 0, 68, 0.5);
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px currentColor; }
+            50% { box-shadow: 0 0 30px currentColor; }
+        }
+        
+        /* Tab Navigation - Neon Style */
+        .cyber-tabs {
+            background: rgba(10, 10, 10, 0.9);
+            border-bottom: 1px solid #00ff41;
+            padding: 0;
+            margin: 20px 0;
+            display: flex;
+            gap: 5px;
+        }
+        
+        .cyber-tab {
+            background: transparent;
+            border: none;
+            color: #00ff41;
+            padding: 15px 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: 2px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .cyber-tab:hover {
+            background: rgba(0, 255, 65, 0.1);
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+        }
+        
+        .cyber-tab.active {
+            background: rgba(0, 255, 65, 0.15);
+            border-bottom-color: #00ff41;
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.5);
+        }
+        
+        .cyber-tab i {
+            margin-right: 10px;
+            font-size: 1.2rem;
+        }
+        
+        /* Stat Cards - Holographic */
+        .stat-card {
+            background: linear-gradient(135deg, rgba(0, 255, 65, 0.08) 0%, rgba(0, 212, 255, 0.08) 100%);
+            border: none;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 30px rgba(0, 255, 65, 0.15), inset 0 1px 0 rgba(0, 255, 65, 0.1);
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(0, 255, 65, 0.1), transparent);
+            transform: rotate(45deg);
+            animation: shine 3s infinite;
+        }
+        
+        @keyframes shine {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 10px 50px rgba(0, 212, 255, 0.4), inset 0 1px 0 rgba(0, 212, 255, 0.2);
+        }
+        
+        .stat-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.8rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #00ff41 0%, #00d4ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(0, 255, 65, 0.8);
+            position: relative;
+            z-index: 1;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #00ff41;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 10px;
+            font-weight: 600;
+            opacity: 0.8;
+        }
+        
+        /* Card Containers */
+        .cyber-card {
+            background: linear-gradient(135deg, rgba(10, 10, 10, 0.95) 0%, rgba(26, 26, 46, 0.95) 100%);
+            border: none;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 30px rgba(0, 255, 65, 0.15);
+            overflow: hidden;
+        }
+        
+        .cyber-card-header {
+            background: rgba(0, 255, 65, 0.1);
+            border-bottom: 2px solid #00ff41;
+            padding: 15px 20px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .cyber-card-header i {
+            font-size: 1.3rem;
+            text-shadow: 0 0 10px currentColor;
+        }
+        
+        .cyber-card-body {
+            padding: 20px;
+        }
+        
+        /* Map Styling */
+        #map {
+            height: 450px;
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 5px 30px rgba(0, 255, 65, 0.2);
+        }
+        
+        /* Connection Items */
+        .connection-item {
+            background: rgba(0, 255, 65, 0.02);
+            border-left: 3px solid #00ff41;
+            padding: 12px 15px;
+            margin-bottom: 8px;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+            font-family: 'Rajdhani', sans-serif;
+        }
+        
+        .connection-item:hover {
+            background: rgba(0, 255, 65, 0.1);
+            transform: translateX(5px);
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+        }
+        
+        /* Threat Badges */
+        .threat-badge {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            border: 2px solid;
+            display: inline-block;
+        }
+        
+        .threat-low {
+            background: rgba(0, 255, 65, 0.1);
+            border-color: #00ff41;
+            color: #00ff41;
+        }
+        
+        .threat-medium {
+            background: rgba(255, 204, 0, 0.1);
+            border-color: #ffcc00;
+            color: #ffcc00;
+        }
+        
+        .threat-high {
+            background: rgba(255, 136, 0, 0.1);
+            border-color: #ff8800;
+            color: #ff8800;
+        }
+        
+        .threat-critical {
+            background: rgba(255, 0, 68, 0.1);
+            border-color: #ff0044;
+            color: #ff0044;
+            animation: threat-pulse 1s ease-in-out infinite;
+        }
+        
+        @keyframes threat-pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 10px currentColor; }
+            50% { transform: scale(1.05); box-shadow: 0 0 20px currentColor; }
+        }
+        
+        /* Metric Rows */
+        .metric-row {
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(0, 255, 65, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        
+        .metric-row:hover {
+            background: rgba(0, 255, 65, 0.05);
+        }
+        
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+        
+        .metric-label {
+            color: #00ff41;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        
+        .metric-value {
+            font-family: 'Orbitron', monospace;
+            color: #00d4ff;
+            font-weight: 700;
+            text-shadow: 0 0 10px currentColor;
+        }
+        
+        /* Buttons */
+        .cyber-btn {
+            background: linear-gradient(135deg, #00ff41 0%, #00d4ff 100%);
+            border: none;
+            color: #000;
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.5);
+            text-transform: uppercase;
+        }
+        
+        .cyber-btn:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 0 50px rgba(0, 255, 65, 0.8);
+        }
+        
+        .cyber-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #000;
+            border: 1px solid #00ff41;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #00ff41;
+            border-radius: 5px;
+            box-shadow: 0 0 10px #00ff41;
+        }
+        
+        /* Loading Animation */
+        .cyber-loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0, 255, 65, 0.3);
+            border-top-color: #00ff41;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .cyber-logo { font-size: 1.3rem; }
+            .stat-value { font-size: 2rem; }
+            #map { height: 300px; }
+            .cyber-tab { padding: 10px 20px; font-size: 0.9rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Matrix Background -->
+    <canvas id="matrix-bg"></canvas>
+    
+    <div class="dashboard-container">
+        <!-- Cyberpunk Header -->
+        <div class="cyber-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="cyber-logo">
+                    <i class="fas fa-shield-virus"></i> {{ system_name }}
+                </div>
+                <div>
+                    <span class="status-badge status-online" id="systemStatus">
+                        <i class="fas fa-circle"></i> SYSTEM ONLINE
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="container-fluid px-4 py-3">
+            <!-- Tab Navigation -->
+            <div class="cyber-tabs">
+                <button class="cyber-tab active" onclick="switchTab('overview')">
+                    <i class="fas fa-chart-line"></i> OVERVIEW
+                </button>
+                <button class="cyber-tab" onclick="switchTab('network')">
+                    <i class="fas fa-globe"></i> NETWORK
+                </button>
+                <button class="cyber-tab" onclick="switchTab('health')">
+                    <i class="fas fa-heartbeat"></i> HEALTH
+                </button>
+                <button class="cyber-tab" onclick="switchTab('ml')">
+                    <i class="fas fa-brain"></i> ML ENGINE
+                </button>
+            </div>
+
+            <!-- Tab Content -->
+            <div id="tab-content">
+                <!-- OVERVIEW TAB -->
+                <div id="overview-content" class="tab-content-panel">
+                    <div class="row mb-4">
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="stat-card">
+                                <div class="stat-value" id="overviewUptime">-</div>
+                                <div class="stat-label"><i class="fas fa-clock"></i> UPTIME</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="stat-card">
+                                <div class="stat-value" id="overviewEvents">-</div>
+                                <div class="stat-label"><i class="fas fa-database"></i> EVENTS</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="stat-card">
+                                <div class="stat-value" id="overviewAlerts">-</div>
+                                <div class="stat-label"><i class="fas fa-exclamation-triangle"></i> ALERTS</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="stat-card">
+                                <div class="stat-value" id="overviewThreats">-</div>
+                                <div class="stat-label"><i class="fas fa-skull-crossbones"></i> THREATS</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <div class="cyber-card">
+                                <div class="cyber-card-header">
+                                    <i class="fas fa-satellite-dish"></i> LIVE NETWORK ACTIVITY
+                                </div>
+                                <div class="cyber-card-body" style="max-height: 400px; overflow-y: auto;" id="overviewNetwork">
+                                    <div class="text-center"><span class="cyber-loading"></span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="cyber-card">
+                                <div class="cyber-card-header">
+                                    <i class="fas fa-bell"></i> THREAT ALERTS
+                                </div>
+                                <div class="cyber-card-body" style="max-height: 400px; overflow-y: auto;" id="overviewAlertsList">
+                                    <div class="text-center"><span class="cyber-loading"></span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- NETWORK TAB -->
+                <div id="network-content" class="tab-content-panel" style="display: none;">
+                    <div class="row mb-4">
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="stat-card">
+                                <div class="stat-value" id="netTotal">-</div>
+                                <div class="stat-label"><i class="fas fa-network-wired"></i> CONNECTIONS</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="stat-card">
+                                <div class="stat-value" id="netSuspicious">-</div>
+                                <div class="stat-label"><i class="fas fa-user-secret"></i> SUSPICIOUS</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="stat-card">
+                                <div class="stat-value" id="netIPs">-</div>
+                                <div class="stat-label"><i class="fas fa-server"></i> UNIQUE IPS</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="stat-card">
+                                <div class="stat-value" id="netCountries">-</div>
+                                <div class="stat-label"><i class="fas fa-flag"></i> COUNTRIES</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cyber-card mb-3">
+                        <div class="cyber-card-header">
+                            <i class="fas fa-globe-americas"></i> GLOBAL THREAT MAP
+                        </div>
+                        <div class="cyber-card-body">
+                            <div id="map"></div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <div class="cyber-card">
+                                <div class="cyber-card-header">
+                                    <i class="fas fa-exchange-alt"></i> RECENT CONNECTIONS
+                                </div>
+                                <div class="cyber-card-body" style="max-height: 400px; overflow-y: auto;" id="networkConnections">
+                                    <div class="text-center"><span class="cyber-loading"></span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="cyber-card">
+                                <div class="cyber-card-header">
+                                    <i class="fas fa-radiation"></i> HIGH THREAT CONNECTIONS
+                                </div>
+                                <div class="cyber-card-body" style="max-height: 400px; overflow-y: auto;" id="networkSuspicious">
+                                    <div class="text-center"><span class="cyber-loading"></span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- HEALTH TAB -->
+                <div id="health-content" class="tab-content-panel" style="display: none;">
+                    <div class="cyber-card mb-3">
+                        <div class="cyber-card-header">
+                            <i class="fas fa-hospital"></i> SYSTEM STATUS
+                        </div>
+                        <div class="cyber-card-body">
+                            <div class="row">
+                                <div class="col-md-3 col-sm-6 mb-3">
+                                    <div class="stat-card">
+                                        <div class="stat-value" id="healthUptime">-</div>
+                                        <div class="stat-label"><i class="fas fa-power-off"></i> UPTIME</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-sm-6 mb-3">
+                                    <div class="stat-card">
+                                        <div class="stat-value" id="healthEvents">-</div>
+                                        <div class="stat-label"><i class="fas fa-stream"></i> EVENTS</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-sm-6 mb-3">
+                                    <div class="stat-card">
+                                        <div class="stat-value" id="healthDBSize">-</div>
+                                        <div class="stat-label"><i class="fas fa-hdd"></i> DATABASE</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-sm-6 mb-3">
+                                    <div class="stat-card">
+                                        <div class="stat-value" id="healthAlerts">-</div>
+                                        <div class="stat-label"><i class="fas fa-siren-on"></i> ALERTS</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-md-12">
+                                    <div class="stat-card" id="upsCard" style="background: linear-gradient(135deg, rgba(0, 212, 255, 0.08) 0%, rgba(0, 255, 65, 0.08) 100%);">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <div class="stat-label text-start mb-2"><i class="fas fa-plug"></i> UPS POWER</div>
+                                                <div class="stat-value text-start" id="upsStatus" style="font-size: 1.8rem;">-</div>
+                                                <div class="text-start mt-2" style="font-size: 0.85rem; opacity: 0.7;" id="upsDetails">-</div>
+                                            </div>
+                                            <div class="text-end">
+                                                <i class="fas fa-battery-full" id="upsIcon" style="font-size: 3rem; color: #00ff41;"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <div class="cyber-card">
+                                <div class="cyber-card-header">
+                                    <i class="fas fa-microchip"></i> COLLECTOR SERVICES
+                                </div>
+                                <div class="cyber-card-body" id="healthServices">
+                                    <div class="text-center"><span class="cyber-loading"></span></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="cyber-card">
+                                <div class="cyber-card-header">
+                                    <i class="fas fa-tachometer-alt"></i> SYSTEM RESOURCES
+                                </div>
+                                <div class="cyber-card-body">
+                                    <div class="metric-row">
+                                        <span class="metric-label"><i class="fas fa-microchip"></i> CPU</span>
+                                        <span class="metric-value" id="healthCPU">-</span>
+                                    </div>
+                                    <div class="metric-row">
+                                        <span class="metric-label"><i class="fas fa-memory"></i> MEMORY</span>
+                                        <span class="metric-value" id="healthMemory">-</span>
+                                    </div>
+                                    <div class="metric-row">
+                                        <span class="metric-label"><i class="fas fa-hdd"></i> DISK</span>
+                                        <span class="metric-value" id="healthDisk">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ML TAB -->
+                <div id="ml-content" class="tab-content-panel" style="display: none;">
+                    <div class="row mb-4">
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="stat-card">
+                                <div class="stat-value" id="mlEvents">-</div>
+                                <div class="stat-label"><i class="fas fa-chart-bar"></i> TRAINING DATA</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="stat-card">
+                                <div class="stat-value" id="mlAccuracy">-</div>
+                                <div class="stat-label"><i class="fas fa-bullseye"></i> ACCURACY</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="stat-card">
+                                <div class="stat-value" id="mlFP">-</div>
+                                <div class="stat-label"><i class="fas fa-times-circle"></i> FALSE POS</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-sm-6 mb-3">
+                            <div class="stat-card">
+                                <div class="stat-value" id="mlStatus">READY</div>
+                                <div class="stat-label"><i class="fas fa-robot"></i> STATUS</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <div class="cyber-card">
+                                <div class="cyber-card-header">
+                                    <i class="fas fa-database"></i> TRAINING DATASET
+                                </div>
+                                <div class="cyber-card-body">
+                                    <div class="metric-row">
+                                        <span class="metric-label"><i class="fas fa-cogs"></i> PROCESS EVENTS</span>
+                                        <span class="metric-value" id="mlProcessCount">-</span>
+                                    </div>
+                                    <div class="metric-row">
+                                        <span class="metric-label"><i class="fas fa-network-wired"></i> NETWORK EVENTS</span>
+                                        <span class="metric-value" id="mlNetworkCount">-</span>
+                                    </div>
+                                    <div class="metric-row">
+                                        <span class="metric-label"><i class="fas fa-file-alt"></i> FILE EVENTS</span>
+                                        <span class="metric-value" id="mlFileCount">-</span>
+                                    </div>
+                                    <div class="metric-row">
+                                        <span class="metric-label" style="color: #ff0044;"><i class="fas fa-virus"></i> MALICIOUS SAMPLES</span>
+                                        <span class="metric-value" style="color: #ff0044;" id="mlMalicious">-</span>
+                                    </div>
+                                    <div class="metric-row">
+                                        <span class="metric-label"><i class="fas fa-check-circle"></i> BENIGN SAMPLES</span>
+                                        <span class="metric-value" id="mlBenign">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="cyber-card">
+                                <div class="cyber-card-header">
+                                    <i class="fas fa-rocket"></i> NEURAL ENGINE
+                                </div>
+                                <div class="cyber-card-body text-center">
+                                    <button id="mlTrainBtn" class="cyber-btn" onclick="startMLTraining()">
+                                        <i class="fas fa-play"></i> INITIATE TRAINING
+                                    </button>
+                                    <p class="mt-3" style="color: #00ff41; font-size: 0.85rem;">
+                                        <i class="fas fa-info-circle"></i> MIN 1K EVENTS REQUIRED
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        // Matrix Rain Effect
+        const canvas = document.getElementById('matrix-bg');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
+        const charArray = chars.split('');
+        const fontSize = 14;
+        const columns = canvas.width / fontSize;
+        const drops = Array(Math.floor(columns)).fill(1);
+        
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#00ff41';
+            ctx.font = fontSize + 'px monospace';
+            
+            for (let i = 0; i < drops.length; i++) {
+                const text = charArray[Math.floor(Math.random() * charArray.length)];
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+        
+        setInterval(drawMatrix, 33);
+        
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+        
+        // Tab Switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.cyber-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content-panel').forEach(p => p.style.display = 'none');
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName + '-content').style.display = 'block';
+            
+            if (tabName === 'network' && !window.mapInitialized) {
+                initMap();
+            }
+            
+            // Load appropriate data
+            if (tabName === 'overview') loadOverview();
+            else if (tabName === 'network') loadNetwork();
+            else if (tabName === 'health') loadHealth();
+            else if (tabName === 'ml') loadML();
+        }
+        
+        let map;
+        function initMap() {
+            map = L.map('map').setView([20, 0], 2);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO',
+                maxZoom: 19
+            }).addTo(map);
+            window.mapInitialized = true;
+            loadNetworkMap();
+        }
+        
+        function getThreatBadge(score) {
+            if (score >= 75) return '<span class="threat-badge threat-critical"><i class="fas fa-skull"></i> CRITICAL</span>';
+            if (score >= 50) return '<span class="threat-badge threat-high"><i class="fas fa-exclamation-triangle"></i> HIGH</span>';
+            if (score >= 25) return '<span class="threat-badge threat-medium"><i class="fas fa-exclamation"></i> MEDIUM</span>';
+            return '<span class="threat-badge threat-low"><i class="fas fa-check"></i> LOW</span>';
+        }
+        
+        function formatBytes(bytes) {
+            if (!bytes) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function formatUptime(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (days > 0) return `${days}D ${hours}H`;
+            if (hours > 0) return `${hours}H ${minutes}M`;
+            return `${minutes}M`;
+        }
+        
+        // Data loading functions (same logic as before)
+        function loadOverview() {
+            fetch('/api/health')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('overviewUptime').textContent = formatUptime(data.uptime_seconds);
+                    document.getElementById('overviewEvents').textContent = ((data.process_events || 0) + (data.network_events || 0)).toLocaleString();
+                    document.getElementById('overviewAlerts').textContent = data.active_alerts || 0;
+                    document.getElementById('overviewThreats').textContent = data.active_alerts || 0;
+                });
+
+            fetch('/api/network/connections?hours=1')
+                .then(r => r.json())
+                .then(data => {
+                    const html = data.connections.slice(0, 10).map(conn => `
+                        <div class="connection-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${conn.device_name || conn.dest_ip}</strong>
+                                    <span style="opacity: 0.8; margin-left: 8px;">${conn.service_name || 'Port ' + conn.dest_port}</span>
+                                    <span style="opacity: 0.5; margin-left: 8px;">${conn.protocol}</span>
+                                </div>
+                                <div>${getThreatBadge(conn.threat_score)}</div>
+                            </div>
+                            <div style="opacity: 0.6; margin-top: 5px;">${conn.process_name}</div>
+                        </div>
+                    `).join('');
+                    document.getElementById('overviewNetwork').innerHTML = html || '<p style="text-align: center; opacity: 0.5;">NO ACTIVITY</p>';
+                });
+
+            fetch('/api/alerts?hours=24')
+                .then(r => r.json())
+                .then(data => {
+                    const html = data.alerts.slice(0, 10).map(alert => `
+                        <div class="connection-item">
+                            <strong>${alert.alert_type}</strong>
+                            <span class="threat-badge threat-${alert.severity}" style="margin-left: 10px;">${alert.severity.toUpperCase()}</span>
+                            <div style="opacity: 0.6; margin-top: 5px;">${new Date(alert.timestamp * 1000).toLocaleString()}</div>
+                        </div>
+                    `).join('');
+                    document.getElementById('overviewAlertsList').innerHTML = html || '<p style="text-align: center; opacity: 0.5;">NO ALERTS</p>';
+                });
+        }
+
+        function loadNetwork() {
+            fetch('/api/network/stats?hours=24')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('netTotal').textContent = (data.total_connections || 0).toLocaleString();
+                    document.getElementById('netSuspicious').textContent = data.suspicious_connections || 0;
+                    document.getElementById('netIPs').textContent = data.unique_ips || 0;
+                    document.getElementById('netCountries').textContent = data.unique_countries || 0;
+                });
+
+            fetch('/api/network/connections?hours=1')
+                .then(r => r.json())
+                .then(data => {
+                    const html = data.connections.slice(0, 50).map(conn => `
+                        <div class="connection-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${conn.device_name || conn.dest_ip}</strong>
+                                    <span style="opacity: 0.8; margin-left: 8px;">${conn.service_name || 'Port ' + conn.dest_port}</span>
+                                    <span style="opacity: 0.5; margin-left: 8px;">${conn.protocol}</span>
+                                </div>
+                                <div>${getThreatBadge(conn.threat_score)}</div>
+                            </div>
+                            <div style="opacity: 0.6; margin-top: 5px;">${conn.process_name}</div>
+                        </div>
+                    `).join('');
+                    document.getElementById('networkConnections').innerHTML = html || '<p style="text-align: center; opacity: 0.5;">NO CONNECTIONS</p>';
+                });
+
+            fetch('/api/network/suspicious?hours=24&min_score=50')
+                .then(r => r.json())
+                .then(data => {
+                    const html = data.connections.map(conn => `
+                        <div class="connection-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong style="color: #ff0044;">${conn.device_name || conn.dest_ip}</strong>
+                                    <span style="opacity: 0.8; margin-left: 8px;">${conn.service_name || 'Port ' + conn.dest_port}</span>
+                                </div>
+                                <div>${getThreatBadge(conn.threat_score)}</div>
+                            </div>
+                            <div style="opacity: 0.6; margin-top: 5px;">${conn.process_name} • ${new Date(conn.timestamp * 1000).toLocaleString()}</div>
+                        </div>
+                    `).join('');
+                    document.getElementById('networkSuspicious').innerHTML = html || '<p style="text-align: center; color: #00ff41;">NO THREATS DETECTED</p>';
+                });
+        }
+
+        function loadNetworkMap() {
+            fetch('/api/network/map?hours=24')
+                .then(r => r.json())
+                .then(data => {
+                    data.locations.forEach(loc => {
+                        if (loc.lat && loc.lon) {
+                            const color = loc.max_threat >= 75 ? '#ff0044' : loc.max_threat >= 50 ? '#ff8800' : loc.max_threat >= 25 ? '#ffcc00' : '#00ff41';
+                            L.circleMarker([loc.lat, loc.lon], {
+                                radius: Math.min(8 + (loc.connections / 10), 20),
+                                fillColor: color,
+                                color: '#fff',
+                                weight: 1,
+                                fillOpacity: 0.7
+                            }).addTo(map).bindPopup(`
+                                <strong>${loc.city}, ${loc.country}</strong><br>
+                                IP: ${loc.ip}<br>
+                                Connections: ${loc.connections}<br>
+                                Threat: ${loc.max_threat}
+                            `);
+                        }
+                    });
+                });
+        }
+
+        function loadHealth() {
+            fetch('/api/health')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('healthUptime').textContent = formatUptime(data.uptime_seconds);
+                    document.getElementById('healthEvents').textContent = ((data.process_events || 0) + (data.network_events || 0)).toLocaleString();
+                    document.getElementById('healthDBSize').textContent = formatBytes(data.db_size_bytes);
+                    document.getElementById('healthAlerts').textContent = data.active_alerts || 0;
+                    
+                    document.getElementById('healthCPU').textContent = data.cpu_percent ? data.cpu_percent.toFixed(1) + '%' : 'N/A';
+                    document.getElementById('healthMemory').textContent = data.memory_mb ? data.memory_mb.toFixed(0) + ' MB' : 'N/A';
+                    document.getElementById('healthDisk').textContent = data.disk_percent ? data.disk_percent.toFixed(1) + '%' : 'N/A';
+
+                    document.getElementById('healthServices').innerHTML = `
+                        <div class="metric-row">
+                            <span class="metric-label"><i class="fas fa-cog"></i> EDR COLLECTOR</span>
+                            <span class="metric-value">${data.collector_running ? '<i class="fas fa-check-circle" style="color: #00ff41;"></i> ONLINE' : '<i class="fas fa-times-circle" style="color: #ff0044;"></i> OFFLINE'}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label"><i class="fas fa-wifi"></i> NETWORK TRACKER</span>
+                            <span class="metric-value">${data.network_tracker_running ? '<i class="fas fa-check-circle" style="color: #00ff41;"></i> ACTIVE' : '<i class="fas fa-times-circle" style="color: #ff0044;"></i> INACTIVE'}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label"><i class="fas fa-server"></i> NAS BACKUP</span>
+                            <span class="metric-value">${data.nas_available ? '<i class="fas fa-check-circle" style="color: #00ff41;"></i> CONNECTED' : '<i class="fas fa-times-circle" style="color: #ffcc00;"></i> UNAVAILABLE'}</span>
+                        </div>
+                    `;
+                });
+            
+            // Fetch UPS status
+            fetch('/api/ups/status')
+                .then(r => r.json())
+                .then(data => {
+                    const upsCard = document.getElementById('upsCard');
+                    const upsStatus = document.getElementById('upsStatus');
+                    const upsDetails = document.getElementById('upsDetails');
+                    const upsIcon = document.getElementById('upsIcon');
+                    
+                    if (data.error) {
+                        upsStatus.textContent = 'UNAVAILABLE';
+                        upsDetails.textContent = 'No UPS data';
+                        upsIcon.className = 'fas fa-plug-circle-xmark';
+                        upsIcon.style.color = '#666';
+                        return;
+                    }
+                    
+                    if (data.connected) {
+                        upsStatus.textContent = data.device_name || 'UPS ONLINE';
+                        upsIcon.className = 'fas fa-battery-full';
+                        upsIcon.style.color = '#00ff41';
+                        
+                        let details = `Status: ${data.status.toUpperCase()}`;
+                        if (data.battery_charge) details += ` | Battery: ${data.battery_charge}%`;
+                        if (data.disconnects_24h > 0) details += ` | Disconnects (24h): ${data.disconnects_24h}`;
+                        upsDetails.textContent = details;
+                        
+                        upsCard.style.background = 'linear-gradient(135deg, rgba(0, 212, 255, 0.08) 0%, rgba(0, 255, 65, 0.08) 100%)';
+                    } else {
+                        upsStatus.textContent = 'DISCONNECTED';
+                        upsDetails.textContent = 'UPS not detected on USB';
+                        upsIcon.className = 'fas fa-plug-circle-xmark';
+                        upsIcon.style.color = '#ff0044';
+                        upsCard.style.background = 'linear-gradient(135deg, rgba(255, 0, 68, 0.15) 0%, rgba(255, 102, 0, 0.15) 100%)';
+                    }
+                })
+                .catch(err => {
+                    console.error('UPS fetch error:', err);
+                    document.getElementById('upsStatus').textContent = 'ERROR';
+                });
+        }
+
+        function loadML() {
+            fetch('/api/ml/status')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('mlEvents').textContent = (data.process_events + data.network_events).toLocaleString();
+                    document.getElementById('mlAccuracy').textContent = data.model_accuracy ? (data.model_accuracy * 100).toFixed(1) + '%' : 'N/A';
+                    document.getElementById('mlFP').textContent = data.false_positive_rate ? (data.false_positive_rate * 100).toFixed(2) + '%' : 'N/A';
+                    document.getElementById('mlStatus').textContent = data.ready_to_train ? 'READY' : 'STANDBY';
+                    
+                    document.getElementById('mlProcessCount').textContent = data.process_events.toLocaleString();
+                    document.getElementById('mlNetworkCount').textContent = data.network_events.toLocaleString();
+                    document.getElementById('mlFileCount').textContent = data.file_events.toLocaleString();
+                    document.getElementById('mlMalicious').textContent = data.labeled_malicious || 0;
+                    document.getElementById('mlBenign').textContent = data.labeled_benign || 0;
+                    
+                    document.getElementById('mlTrainBtn').disabled = !data.ready_to_train;
+                });
+        }
+
+        function startMLTraining() {
+            fetch('/api/ml/train', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    alert(data.message || 'TRAINING INITIATED');
+                    loadML();
+                });
+        }
+
+        // ==================== WEBSOCKET REAL-TIME UPDATES ====================
+        
+        // Initialize Socket.IO connection
+        const socket = io();
+        
+        // Connection events
+        socket.on('connect', () => {
+            console.log('✅ WebSocket connected - Real-time updates enabled');
+            showNotification('🔗 Real-time updates connected', 'success');
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('⚠️ WebSocket disconnected');
+            showNotification('⚠️ Real-time updates disconnected', 'warning');
+        });
+        
+        socket.on('connection_response', (data) => {
+            console.log('Connection response:', data);
+        });
+        
+        // Stats update (every 5 seconds from server)
+        socket.on('stats_update', (data) => {
+            console.log('📊 Stats update:', data);
+            
+            // Update overview stats if on overview tab
+            if (document.getElementById('overview-content').style.display !== 'none') {
+                document.getElementById('overviewEvents').textContent = data.total_processes.toLocaleString();
+                document.getElementById('overviewAlerts').textContent = data.active_alerts || 0;
+                document.getElementById('overviewThreats').textContent = data.suspicious_processes || 0;
+            }
+        });
+        
+        // Threat alert (real-time new threats)
+        socket.on('threat_alert', (alert) => {
+            console.log('🚨 THREAT ALERT:', alert);
+            
+            // Show desktop notification
+            showThreatNotification(alert);
+            
+            // Play alert sound (optional)
+            // playAlertSound();
+            
+            // Refresh current view
+            const currentTab = document.querySelector('.cyber-tab.active');
+            if (currentTab) {
+                const tabName = currentTab.textContent.toLowerCase().replace(/\s/g, '');
+                if (tabName.includes('overview')) loadOverview();
+                else if (tabName.includes('alert')) loadOverview();
+            }
+        });
+        
+        // UI notification system
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                background: ${type === 'success' ? 'rgba(0, 255, 65, 0.9)' : type === 'warning' ? 'rgba(255, 204, 0, 0.9)' : 'rgba(0, 212, 255, 0.9)'};
+                color: #000;
+                padding: 15px 25px;
+                border-radius: 10px;
+                font-weight: 700;
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+                box-shadow: 0 5px 30px rgba(0, 255, 65, 0.5);
+                max-width: 400px;
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+        
+        function showThreatNotification(alert) {
+            const severity = alert.severity || 'unknown';
+            const severityColor = {
+                'critical': '#ff0044',
+                'high': '#ff6600',
+                'medium': '#ffcc00',
+                'low': '#00ff41'
+            }[severity] || '#00d4ff';
+            
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                background: rgba(0, 0, 0, 0.95);
+                border: 3px solid ${severityColor};
+                color: ${severityColor};
+                padding: 20px;
+                border-radius: 15px;
+                font-weight: 700;
+                z-index: 10000;
+                animation: pulse-glow 1s ease-in-out infinite;
+                box-shadow: 0 0 40px ${severityColor};
+                max-width: 450px;
+                font-family: 'Rajdhani', sans-serif;
+            `;
+            
+            notification.innerHTML = `
+                <div style="font-size: 1.2rem; margin-bottom: 10px;">
+                    <i class="fas fa-exclamation-triangle"></i> ${severity.toUpperCase()} THREAT DETECTED
+                </div>
+                <div style="opacity: 0.8; font-size: 0.95rem;">
+                    ${alert.description || 'Unknown threat'}
+                </div>
+                <div style="opacity: 0.6; font-size: 0.85rem; margin-top: 8px;">
+                    ${new Date(alert.timestamp * 1000).toLocaleTimeString()}
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto-dismiss after 10 seconds for critical, 5 for others
+            const dismissTime = severity === 'critical' ? 10000 : 5000;
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, dismissTime);
+        }
+        
+        // Subscribe to real-time events
+        socket.emit('subscribe', { type: 'all' });
+        
+        // ==================== END WEBSOCKET ====================
+        
+        // Initial load
+        loadOverview();
+        
+        // Auto-refresh active tab every 15 seconds
+        setInterval(() => {
+            const currentTab = document.querySelector('.cyber-tab.active');
+            if (currentTab) {
+                const tabName = currentTab.textContent.toLowerCase().trim();
+                if (tabName.includes('overview')) loadOverview();
+                else if (tabName.includes('network')) loadNetwork();
+                else if (tabName.includes('health')) loadHealth();
+                else if (tabName.includes('ml')) loadML();
+            }
+        }, 15000);
+    </script>
+    
+    <style>
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(400px); opacity: 0; }
+        }
+    </style>
+</body>
+</html>

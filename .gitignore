@@ -1,0 +1,17 @@
+# Never commit runtime/state
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Never commit secrets
+*.key
+*.p12
+*.pfx
+.env
+
+# Legacy snapshot exclusions (defence-in-depth)
+legacy_snapshot/**/data/
+legacy_snapshot/**/config/
+legacy_snapshot/**/ssl/
+legacy_snapshot/**/.env

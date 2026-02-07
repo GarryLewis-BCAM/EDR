@@ -1,0 +1,79 @@
+{
+  "timestamp": "2026-01-11T16:16:24.071204",
+  "training_time_seconds": 1.752897,
+  "total_samples": 119571,
+  "features": [
+    "cpu_percent",
+    "memory_mb",
+    "num_threads",
+    "connections_count",
+    "parent_pid_norm",
+    "has_network",
+    "is_child"
+  ],
+  "label_distribution": {
+    "benign": 39390,
+    "malicious": 329,
+    "unlabeled": 79852
+  },
+  "models": {
+    "isolation_forest": {
+      "model": "IsolationForest",
+      "total_samples": 119571,
+      "anomalies_detected": 11953,
+      "anomaly_percentage": 9.996571074926194,
+      "mean_anomaly_score": -0.3962769066314557,
+      "std_anomaly_score": 0.09190576993275974,
+      "min_anomaly_score": -0.8190640746640834,
+      "max_anomaly_score": -0.32993047859374
+    },
+    "random_forest": {
+      "model": "RandomForest",
+      "train_samples": 31775,
+      "test_samples": 7944,
+      "accuracy": 0.9996223564954683,
+      "precision": 1.0,
+      "recall": 0.9545454545454546,
+      "f1_score": 0.9767441860465116,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.045454545454545456,
+      "confusion_matrix": {
+        "true_negatives": 7878,
+        "false_positives": 0,
+        "false_negatives": 3,
+        "true_positives": 63
+      },
+      "feature_importance": [
+        {
+          "feature": "memory_mb",
+          "importance": 0.3779386832604755
+        },
+        {
+          "feature": "parent_pid_norm",
+          "importance": 0.22805725245923114
+        },
+        {
+          "feature": "num_threads",
+          "importance": 0.17440521280776738
+        },
+        {
+          "feature": "has_network",
+          "importance": 0.08323823245619902
+        },
+        {
+          "feature": "cpu_percent",
+          "importance": 0.0704218237990754
+        },
+        {
+          "feature": "connections_count",
+          "importance": 0.06593879521725152
+        },
+        {
+          "feature": "is_child",
+          "importance": 0.0
+        }
+      ],
+      "roc_auc": 1.0
+    }
+  }
+}

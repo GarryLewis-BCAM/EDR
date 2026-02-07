@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Connections - {{ system_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body {
+            background: #0a0e27;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            background: #1a1f3a !important;
+            border-bottom: 2px solid #2d3561;
+        }
+        
+        .navbar-brand, .nav-link {
+            color: #e0e0e0 !important;
+        }
+        
+        .nav-link:hover {
+            color: #4dabf7 !important;
+        }
+        
+        .card {
+            background: #1a1f3a;
+            border: 1px solid #2d3561;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            background: #2d3561;
+            border-bottom: 1px solid #4dabf7;
+            font-weight: bold;
+        }
+        
+        #map {
+            height: 500px;
+            width: 100%;
+            border-radius: 8px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            padding: 20px;
+            color: white;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .connection-item {
+            padding: 12px;
+            border-bottom: 1px solid #2d3561;
+            transition: background 0.2s;
+        }
+        
+        .connection-item:hover {
+            background: #2d3561;
+        }
+        
+        .threat-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+        
+        .threat-low { background: #51cf66; color: #000; }
+        .threat-medium { background: #ffd43b; color: #000; }
+        .threat-high { background: #ff8787; color: #000; }
+        .threat-critical { background: #ff6b6b; color: #fff; }
+        
+        .process-badge {
+            background: #4dabf7;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+        }
+        
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .stat-value { font-size: 1.8rem; }
+            #map { height: 350px; }
+            .connection-item { padding: 8px; }
+        }
+        
+        /* Dark scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1a1f3a;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #4dabf7;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">🛡️ {{ system_name }}</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item"><a class="nav-link" href="/">Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/network">Network</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/processes">Processes</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/alerts">Alerts</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/ml">ML Training</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/health">Health</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Stats Row -->
+        <div class="row mb-4">
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalConnections">-</div>
+                    <div class="stat-label">Total Connections</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <div class="stat-value" id="suspiciousCount">-</div>
+                    <div class="stat-label">Suspicious</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <div class="stat-value" id="uniqueIPs">-</div>
+                    <div class="stat-label">Unique IPs</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                    <div class="stat-value" id="uniqueCountries">-</div>
+                    <div class="stat-label">Countries</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- World Map -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">🌍 Global Connection Map</h5>
+            </div>
+            <div class="card-body">
+                <div id="map"></div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Recent Connections -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">📡 Recent Connections</h5>
+                    </div>
+                    <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                        <div id="recentConnections">
+                            <div class="text-center p-4">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <p class="mt-2">Loading connections...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Suspicious Connections -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">⚠️ Suspicious Connections</h5>
+                    </div>
+                    <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                        <div id="suspiciousConnections">
+                            <div class="text-center p-4">
+                                <div class="spinner-border text-warning" role="status"></div>
+                                <p class="mt-2">Loading suspicious activity...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Processes -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">🔝 Top Processes by Network Activity</h5>
+            </div>
+            <div class="card-body">
+                <div id="topProcesses" class="row"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([20, 0], 2);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Threat color function
+        function getThreatColor(score) {
+            if (score >= 75) return '#ff6b6b';
+            if (score >= 50) return '#ff8787';
+            if (score >= 25) return '#ffd43b';
+            return '#51cf66';
+        }
+
+        function getThreatBadge(score) {
+            if (score >= 75) return '<span class="threat-badge threat-critical">Critical</span>';
+            if (score >= 50) return '<span class="threat-badge threat-high">High</span>';
+            if (score >= 25) return '<span class="threat-badge threat-medium">Medium</span>';
+            return '<span class="threat-badge threat-low">Low</span>';
+        }
+
+        // Load stats
+        function loadStats() {
+            fetch('/api/network/stats?hours=24')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('totalConnections').textContent = data.total_connections || 0;
+                    document.getElementById('suspiciousCount').textContent = data.suspicious_connections || 0;
+                    document.getElementById('uniqueIPs').textContent = data.unique_ips || 0;
+                    document.getElementById('uniqueCountries').textContent = data.unique_countries || 0;
+
+                    // Top processes
+                    if (data.top_processes) {
+                        const html = data.top_processes.map(p => `
+                            <div class="col-md-4 mb-2">
+                                <span class="process-badge">${p.name}</span>
+                                <span class="ms-2 text-muted">${p.connections} connections</span>
+                            </div>
+                        `).join('');
+                        document.getElementById('topProcesses').innerHTML = html;
+                    }
+                })
+                .catch(err => console.error('Stats error:', err));
+        }
+
+        // Load map data
+        function loadMap() {
+            fetch('/api/network/map?hours=24')
+                .then(r => r.json())
+                .then(data => {
+                    data.locations.forEach(loc => {
+                        if (loc.lat && loc.lon) {
+                            const marker = L.circleMarker([loc.lat, loc.lon], {
+                                radius: Math.min(8 + (loc.connections / 10), 20),
+                                fillColor: getThreatColor(loc.max_threat),
+                                color: '#fff',
+                                weight: 1,
+                                opacity: 1,
+                                fillOpacity: 0.7
+                            }).addTo(map);
+
+                            marker.bindPopup(`
+                                <strong>${loc.city}, ${loc.country}</strong><br>
+                                IP: ${loc.ip}<br>
+                                Connections: ${loc.connections}<br>
+                                Max Threat: ${loc.max_threat}<br>
+                                Processes: ${loc.processes.slice(0, 3).join(', ')}
+                            `);
+                        }
+                    });
+                })
+                .catch(err => console.error('Map error:', err));
+        }
+
+        // Load recent connections
+        function loadRecentConnections() {
+            fetch('/api/network/connections?hours=1')
+                .then(r => r.json())
+                .then(data => {
+                    const html = data.connections.slice(0, 50).map(conn => `
+                        <div class="connection-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${conn.dest_ip}:${conn.dest_port}</strong>
+                                    <span class="text-muted ms-2">${conn.protocol}</span>
+                                    ${conn.country !== 'Unknown' ? `<span class="text-info ms-2">📍 ${conn.country}</span>` : ''}
+                                </div>
+                                <div>
+                                    ${getThreatBadge(conn.threat_score)}
+                                </div>
+                            </div>
+                            <div class="small text-muted mt-1">
+                                ${conn.process_name} • ${new Date(conn.timestamp * 1000).toLocaleTimeString()}
+                            </div>
+                        </div>
+                    `).join('');
+                    document.getElementById('recentConnections').innerHTML = html || '<p class="text-center text-muted">No connections found</p>';
+                })
+                .catch(err => console.error('Connections error:', err));
+        }
+
+        // Load suspicious connections
+        function loadSuspiciousConnections() {
+            fetch('/api/network/suspicious?hours=24&min_score=50')
+                .then(r => r.json())
+                .then(data => {
+                    const html = data.connections.map(conn => `
+                        <div class="connection-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong class="text-warning">${conn.dest_ip}:${conn.dest_port}</strong>
+                                    <span class="text-muted ms-2">${conn.protocol}</span>
+                                    ${conn.country !== 'Unknown' ? `<span class="text-info ms-2">📍 ${conn.country}</span>` : ''}
+                                </div>
+                                <div>
+                                    ${getThreatBadge(conn.threat_score)}
+                                </div>
+                            </div>
+                            <div class="small text-muted mt-1">
+                                ${conn.process_name} (PID: ${conn.process_pid}) • ${new Date(conn.timestamp * 1000).toLocaleString()}
+                            </div>
+                        </div>
+                    `).join('');
+                    document.getElementById('suspiciousConnections').innerHTML = html || '<p class="text-center text-muted">No suspicious connections ✅</p>';
+                })
+                .catch(err => console.error('Suspicious error:', err));
+        }
+
+        // Load all data
+        loadStats();
+        loadMap();
+        loadRecentConnections();
+        loadSuspiciousConnections();
+
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            loadStats();
+            loadRecentConnections();
+            loadSuspiciousConnections();
+        }, 30000);
+    </script>
+</body>
+</html>

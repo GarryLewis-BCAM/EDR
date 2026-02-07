@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ system_name }} - EDR Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0a0e27;
+            color: #e4e4e7;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px 0;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: rgba(255,255,255,0.9);
+            font-size: 1.1rem;
+        }
+        
+        nav {
+            margin-top: 20px;
+        }
+        
+        nav a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            margin-right: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+        
+        nav a:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-2px);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: #1a1f3a;
+            padding: 25px;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.2);
+        }
+        
+        .stat-card h3 {
+            color: #a1a1aa;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #71717a;
+            font-size: 0.9rem;
+        }
+        
+        .alert-card {
+            background: #1a1f3a;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-warning {
+            border-left: 4px solid #f59e0b;
+        }
+        
+        .alert-critical {
+            border-left: 4px solid #ef4444;
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+            margin: 30px 0 15px;
+            color: #fafafa;
+        }
+        
+        table {
+            width: 100%;
+            background: #1a1f3a;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        thead {
+            background: #252b4a;
+        }
+        
+        th, td {
+            padding: 15px;
+            text-align: left;
+        }
+        
+        th {
+            color: #a1a1aa;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+        }
+        
+        tr:hover {
+            background: #252b4a;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .badge-success {
+            background: #10b981;
+            color: white;
+        }
+        
+        .badge-warning {
+            background: #f59e0b;
+            color: white;
+        }
+        
+        .badge-danger {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .refresh-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #667eea;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .refresh-indicator.active {
+            display: block;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        
+        .loading {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>🛡️ {{ system_name }}</h1>
+            <p class="subtitle">Real-time Endpoint Detection & Response Monitoring</p>
+            <nav>
+                <a href="/">Dashboard</a>
+                <a href="/alerts">Alerts</a>
+                <a href="/processes">Processes</a>
+                <a href="/health">Health</a>
+            </nav>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="refresh-indicator" id="refreshIndicator">Refreshing...</div>
+        
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <h3>Process Events</h3>
+                <div class="stat-value" id="processCount">{{ stats.get('process_events_count', 0) | int }}</div>
+                <div class="stat-label">Total collected</div>
+            </div>
+            
+            <div class="stat-card">
+                <h3>File Events</h3>
+                <div class="stat-value" id="fileCount">{{ stats.get('file_events_count', 0) | int }}</div>
+                <div class="stat-label">Monitored changes</div>
+            </div>
+            
+            <div class="stat-card">
+                <h3>Active Alerts</h3>
+                <div class="stat-value" id="alertCount">{{ stats.get('unresolved_alerts', 0) | int }}</div>
+                <div class="stat-label">Requires attention</div>
+            </div>
+            
+            <div class="stat-card">
+                <h3>Database Size</h3>
+                <div class="stat-value" id="dbSize">{{ "%.1f"|format(stats.get('db_size_mb', 0)) }}</div>
+                <div class="stat-label">MB</div>
+            </div>
+        </div>
+        
+        <h2 class="section-title">Recent Suspicious Activity</h2>
+        <table id="recentActivity">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Process</th>
+                    <th>PID</th>
+                    <th>User</th>
+                    <th>Score</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 40px; color: #71717a;">
+                        Loading activity data...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <h2 class="section-title">System Health</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Collector Status</h3>
+                <div class="stat-value">
+                    <span class="badge badge-success">Running</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <h3>NAS Connection</h3>
+                <div class="stat-value" id="nasStatus">
+                    <span class="badge badge-success">Connected</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <h3>Last Update</h3>
+                <div class="stat-value" style="font-size: 1.2rem;" id="lastUpdate">Just now</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-refresh every 5 seconds
+        let refreshInterval = 5000;
+        
+        function formatTime(timestamp) {
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleTimeString();
+        }
+        
+        function formatTimeSince(timestamp) {
+            const now = Date.now() / 1000;
+            const diff = now - timestamp;
+            
+            if (diff < 60) return 'Just now';
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return `${Math.floor(diff / 86400)}d ago`;
+        }
+        
+        async function refreshStats() {
+            const indicator = document.getElementById('refreshIndicator');
+            indicator.classList.add('active');
+            
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                
+                document.getElementById('processCount').textContent = data.process_events_count || 0;
+                document.getElementById('fileCount').textContent = data.file_events_count || 0;
+                document.getElementById('alertCount').textContent = data.unresolved_alerts || 0;
+                document.getElementById('dbSize').textContent = (data.db_size_mb || 0).toFixed(1);
+            } catch (error) {
+                console.error('Error refreshing stats:', error);
+            }
+            
+            setTimeout(() => indicator.classList.remove('active'), 500);
+        }
+        
+        async function refreshActivity() {
+            try {
+                const response = await fetch('/api/processes/recent?minutes=60&suspicious=true');
+                const data = await response.json();
+                
+                const tbody = document.querySelector('#recentActivity tbody');
+                
+                if (data.processes && data.processes.length > 0) {
+                    tbody.innerHTML = data.processes.slice(0, 10).map(proc => `
+                        <tr>
+                            <td>${formatTime(proc.timestamp)}</td>
+                            <td style="font-family: monospace;">${proc.name}</td>
+                            <td>${proc.pid}</td>
+                            <td>${proc.username || 'N/A'}</td>
+                            <td>${proc.suspicious_score.toFixed(1)}</td>
+                            <td>
+                                ${proc.suspicious_score > 75 
+                                    ? '<span class="badge badge-danger">Critical</span>' 
+                                    : '<span class="badge badge-warning">Warning</span>'}
+                            </td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 40px; color: #71717a;">
+                                No suspicious activity detected
+                            </td>
+                        </tr>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error refreshing activity:', error);
+            }
+        }
+        
+        async function refreshHealth() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                
+                const nasStatus = document.getElementById('nasStatus');
+                if (data.nas === 'connected') {
+                    nasStatus.innerHTML = '<span class="badge badge-success">Connected</span>';
+                } else if (data.nas === 'disconnected') {
+                    nasStatus.innerHTML = '<span class="badge badge-danger">Disconnected</span>';
+                } else {
+                    nasStatus.innerHTML = '<span class="badge badge-warning">Unknown</span>';
+                }
+                
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            } catch (error) {
+                console.error('Error refreshing health:', error);
+            }
+        }
+        
+        function startAutoRefresh() {
+            refreshStats();
+            refreshActivity();
+            refreshHealth();
+            
+            setInterval(() => {
+                refreshStats();
+                refreshActivity();
+                refreshHealth();
+            }, refreshInterval);
+        }
+        
+        // Start auto-refresh when page loads
+        document.addEventListener('DOMContentLoaded', startAutoRefresh);
+    </script>
+</body>
+</html>

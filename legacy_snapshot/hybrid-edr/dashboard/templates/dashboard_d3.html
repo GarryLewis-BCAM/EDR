@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EDR Security Intelligence</title>
+    
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/topojson@3"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0a0e27;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* Main Layout */
+        .dashboard {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            grid-template-rows: 60px 1fr;
+            height: 100vh;
+            gap: 0;
+        }
+
+        /* Header */
+        .header {
+            grid-column: 1 / -1;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .system-status {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .status-dot.active {
+            background: #10b981;
+            box-shadow: 0 0 10px #10b981;
+        }
+        
+        .status-dot.inactive {
+            background: #ef4444;
+            box-shadow: 0 0 10px #ef4444;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Sidebar Stats */
+        .sidebar {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 24px 16px;
+            overflow-y: auto;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        .stat-circle {
+            margin-bottom: 24px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 8px;
+        }
+
+        .circle-container {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 12px;
+        }
+
+        .stat-value {
+            text-align: center;
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-sublabel {
+            text-align: center;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Main Visualization Area */
+        .main-viz {
+            position: relative;
+            background: #0a0e27;
+            overflow: hidden;
+        }
+
+        /* Network Graph Canvas */
+        #threat-network {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Threat Bubbles Overlay */
+        #threat-bubbles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* World Map Overlay */
+        #world-map {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 400px;
+            height: 250px;
+            background: rgba(10, 14, 39, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        .map-title {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            padding: 12px 16px;
+            background: rgba(10, 14, 39, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 1000;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .tooltip.active {
+            opacity: 1;
+        }
+
+        /* Node Styles */
+        .node circle {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .node:hover circle {
+            stroke-width: 3px;
+        }
+
+        .node text {
+            font-size: 11px;
+            fill: rgba(255, 255, 255, 0.8);
+            text-anchor: middle;
+            pointer-events: none;
+        }
+
+        .link {
+            stroke: rgba(255, 255, 255, 0.1);
+            stroke-width: 1;
+        }
+
+        .link.threat {
+            stroke: #ef4444;
+            stroke-width: 2;
+            animation: flow 2s linear infinite;
+        }
+
+        @keyframes flow {
+            0% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: 20; }
+        }
+
+        /* Loading State */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Metrics Panel */
+        .metrics-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: 16px;
+        }
+
+        .metric-bubble {
+            width: 100px;
+            height: 100px;
+            background: rgba(10, 14, 39, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .metric-bubble:hover {
+            transform: scale(1.05);
+            border-color: rgba(102, 126, 234, 0.5);
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .metric-label {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 4px;
+        }
+
+        /* Threat Score Arc */
+        .threat-arc {
+            position: absolute;
+            top: 50%;
+            right: 40px;
+            transform: translateY(-50%);
+        }
+
+        /* AI Modal */
+        .ai-modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            animation: fadeIn 0.2s ease;
+        }
+
+        .ai-modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .ai-modal-content {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .ai-modal-header {
+            padding: 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-modal-header h2 {
+            margin: 0;
+            font-size: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 32px;
+            cursor: pointer;
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .ai-modal-body {
+            padding: 24px;
+            max-height: calc(80vh - 100px);
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .ai-modal-body::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .ai-modal-body::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        .loading-spinner {
+            text-align: center;
+            padding: 40px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .issue-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 3px solid #667eea;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .issue-card.critical {
+            border-left-color: #ef4444;
+        }
+
+        .issue-card.high {
+            border-left-color: #f59e0b;
+        }
+
+        .issue-card.medium {
+            border-left-color: #10b981;
+        }
+
+        .issue-title {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+
+        .issue-explanation {
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 12px;
+        }
+
+        .recommendation-list {
+            list-style: none;
+            padding: 0;
+            margin: 12px 0;
+        }
+
+        .recommendation-list li {
+            padding: 8px 0;
+            padding-left: 24px;
+            position: relative;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .recommendation-list li:before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: #667eea;
+        }
+
+        .fix-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 12px;
+            transition: all 0.2s;
+        }
+
+        .fix-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        /* Make metrics clickable */
+        .stat-circle,
+        .metric-bubble {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .stat-circle:hover,
+        .metric-bubble:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">⬢ EDR INTELLIGENCE</div>
+            <div class="system-status">
+                <div class="status-item">
+                    <div class="status-dot active" id="collector-dot"></div>
+                    <span id="collector-status">Collector: Checking...</span>
+                </div>
+                <div class="status-item">
+                    <span id="event-count">0</span> events
+                </div>
+                <div class="status-item">
+                    <span id="threat-count">0</span> threats
+                </div>
+                <div class="status-item">
+                    <span id="incident-count">0</span> incidents
+                </div>
+            </div>
+        </header>
+
+        <!-- Sidebar with Circular Stats -->
+        <aside class="sidebar">
+            <div class="stat-circle">
+                <div class="stat-label">System Health</div>
+                <div class="circle-container">
+                    <svg width="120" height="120" id="health-circle"></svg>
+                </div>
+                <div class="stat-value" id="health-value">--</div>
+                <div class="stat-sublabel">Overall Score</div>
+            </div>
+
+            <div class="stat-circle">
+                <div class="stat-label">Threat Level</div>
+                <div class="circle-container">
+                    <svg width="120" height="120" id="threat-circle"></svg>
+                </div>
+                <div class="stat-value" id="threat-value">--</div>
+                <div class="stat-sublabel">Current Risk</div>
+            </div>
+
+            <div class="stat-circle">
+                <div class="stat-label">Active Processes</div>
+                <div class="circle-container">
+                    <svg width="120" height="120" id="process-circle"></svg>
+                </div>
+                <div class="stat-value" id="process-value">--</div>
+                <div class="stat-sublabel">Monitored</div>
+            </div>
+
+            <div class="stat-circle">
+                <div class="stat-label">Network Activity</div>
+                <div class="circle-container">
+                    <svg width="120" height="120" id="network-circle"></svg>
+                </div>
+                <div class="stat-value" id="network-value">--</div>
+                <div class="stat-sublabel">Connections/sec</div>
+            </div>
+        </aside>
+
+        <!-- Main Visualization -->
+        <main class="main-viz">
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <div>Initializing threat intelligence...</div>
+            </div>
+
+            <!-- Metrics Bubbles -->
+            <div class="metrics-panel">
+                <div class="metric-bubble">
+                    <div class="metric-value" id="cpu-metric">--</div>
+                    <div class="metric-label">CPU Load</div>
+                </div>
+                <div class="metric-bubble">
+                    <div class="metric-value" id="memory-metric">--</div>
+                    <div class="metric-label">Memory</div>
+                </div>
+                <div class="metric-bubble">
+                    <div class="metric-value" id="disk-metric">--</div>
+                    <div class="metric-label">Disk I/O</div>
+                </div>
+            </div>
+
+            <!-- Force-Directed Threat Network -->
+            <svg id="threat-network"></svg>
+
+            <!-- World Map -->
+            <div id="world-map">
+                <div class="map-title">THREAT GEOLOCATION</div>
+                <svg id="map-svg" width="100%" height="200"></svg>
+            </div>
+
+            <!-- Threat Score Arc -->
+            <div class="threat-arc">
+                <svg id="threat-arc-svg" width="180" height="180"></svg>
+            </div>
+        </main>
+    </div>
+
+    <!-- Tooltip -->
+    <div class="tooltip" id="tooltip"></div>
+
+    <!-- AI Explanation Modal -->
+    <div class="ai-modal" id="ai-modal">
+        <div class="ai-modal-content">
+            <div class="ai-modal-header">
+                <h2 id="modal-title">AI Analysis</h2>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="ai-modal-body" id="modal-body">
+                <div class="loading-spinner">Analyzing...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API Configuration
+        const API_BASE = '';
+        const REFRESH_INTERVAL = 5000;
+
+        // Tooltip
+        const tooltip = d3.select('#tooltip');
+
+        // Initialize Dashboard
+        let graphData = { nodes: [], links: [] };
+        let simulation;
+
+        // Fetch data from API
+        async function fetchData() {
+            try {
+                const [stats, processesData, alerts] = await Promise.all([
+                    fetch(`${API_BASE}/api/stats`).then(r => r.json()),
+                    fetch(`${API_BASE}/api/processes/recent?minutes=1440&suspicious=true`).then(r => r.json()), // Last 24 hours
+                    fetch(`${API_BASE}/api/alerts?hours=1`).then(r => r.json())
+                ]);
+
+                let processes = processesData.processes || [];
+                
+                // If no suspicious processes, fetch regular ones
+                if (processes.length === 0) {
+                    console.log('No suspicious processes, fetching all recent processes...');
+                    const allProcesses = await fetch(`${API_BASE}/api/processes/recent?minutes=60`).then(r => r.json());
+                    processes = allProcesses.processes || [];
+                }
+
+                return { stats, processes, alerts };
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                return null;
+            }
+        }
+
+        // Update header stats
+        function updateHeaderStats(stats) {
+            d3.select('#event-count').text(stats.total_processes.toLocaleString());
+            d3.select('#threat-count').text(stats.suspicious_count.toLocaleString());
+        }
+        
+        // Check collector status
+        async function checkCollectorStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/api/collector/status`);
+                const status = await response.json();
+                
+                const dot = document.getElementById('collector-dot');
+                const statusText = document.getElementById('collector-status');
+                
+                if (status.running) {
+                    dot.className = 'status-dot active';
+                    const secondsAgo = Math.round(status.seconds_since_activity || 0);
+                    statusText.textContent = `Collector: Active (${secondsAgo}s ago)`;
+                } else {
+                    dot.className = 'status-dot inactive';
+                    statusText.textContent = 'Collector: Inactive';
+                }
+                
+                // Update incident count
+                const incidentsResponse = await fetch(`${API_BASE}/api/incidents?hours=24`);
+                const incidentsData = await incidentsResponse.json();
+                d3.select('#incident-count').text(incidentsData.count || 0);
+                
+            } catch (error) {
+                console.error('Failed to check collector status:', error);
+                const dot = document.getElementById('collector-dot');
+                const statusText = document.getElementById('collector-status');
+                dot.className = 'status-dot inactive';
+                statusText.textContent = 'Collector: Unknown';
+            }
+        }
+
+        // Draw circular progress indicator
+        function drawCircularProgress(svgId, value, maxValue, color) {
+            const svg = d3.select(`#${svgId}`);
+            svg.selectAll('*').remove();
+
+            const width = 120;
+            const height = 120;
+            const radius = 50;
+            const progress = (value / maxValue) * 100;
+
+            const arc = d3.arc()
+                .innerRadius(radius - 10)
+                .outerRadius(radius)
+                .startAngle(0)
+                .endAngle((progress / 100) * 2 * Math.PI);
+
+            const g = svg.append('g')
+                .attr('transform', `translate(${width/2}, ${height/2})`);
+
+            // Background arc
+            g.append('path')
+                .attr('d', d3.arc()
+                    .innerRadius(radius - 10)
+                    .outerRadius(radius)
+                    .startAngle(0)
+                    .endAngle(2 * Math.PI))
+                .attr('fill', 'rgba(255, 255, 255, 0.05)');
+
+            // Progress arc
+            g.append('path')
+                .attr('d', arc)
+                .attr('fill', color)
+                .attr('opacity', 0.8);
+
+            // Center text
+            g.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '0.35em')
+                .attr('fill', '#fff')
+                .attr('font-size', '24px')
+                .attr('font-weight', '700')
+                .text(Math.round(progress) + '%');
+        }
+
+        // Update sidebar circular stats
+        function updateSidebarStats(stats) {
+            // System Health (inverse of avg threat score)
+            const healthScore = Math.max(0, 100 - (stats.average_threat_score || 0));
+            drawCircularProgress('health-circle', healthScore, 100, '#10b981');
+            d3.select('#health-value').text(Math.round(healthScore));
+
+            // Threat Level
+            const threatScore = stats.average_threat_score || 0;
+            drawCircularProgress('threat-circle', threatScore, 100, threatScore > 60 ? '#ef4444' : '#f59e0b');
+            d3.select('#threat-value').text(Math.round(threatScore));
+
+            // Active Processes
+            const processCount = stats.total_processes || 0;
+            drawCircularProgress('process-circle', Math.min(processCount, 1000), 1000, '#667eea');
+            d3.select('#process-value').text(processCount.toLocaleString());
+
+            // Network Activity (simulated)
+            const networkActivity = Math.floor(Math.random() * 100);
+            drawCircularProgress('network-circle', networkActivity, 100, '#06b6d4');
+            d3.select('#network-value').text(networkActivity);
+        }
+
+        // Update metrics bubbles
+        async function updateMetrics(stats) {
+            try {
+                // Fetch real system metrics from API
+                const response = await fetch(`${API_BASE}/api/system/metrics`);
+                if (response.ok) {
+                    const metrics = await response.json();
+                    d3.select('#cpu-metric').text(Math.round(metrics.cpu_percent) + '%');
+                    d3.select('#memory-metric').text(Math.round(metrics.memory_percent) + '%');
+                    d3.select('#disk-metric').text(Math.round(metrics.disk_io_percent || 0) + '%');
+                } else {
+                    // Fallback to static display
+                    d3.select('#cpu-metric').text('--');
+                    d3.select('#memory-metric').text('--');
+                    d3.select('#disk-metric').text('--');
+                }
+            } catch (error) {
+                console.error('Failed to fetch metrics:', error);
+            }
+        }
+
+        // Build force-directed graph data
+        function buildGraphData(processes, alerts) {
+            const nodes = [];
+            const links = [];
+            const nodeMap = new Map();
+
+            // Create central system node
+            const systemNode = {
+                id: 'system',
+                type: 'system',
+                label: 'System',
+                value: 100
+            };
+            nodes.push(systemNode);
+            nodeMap.set('system', systemNode);
+
+            // If no processes, return minimal graph
+            if (!processes || processes.length === 0) {
+                console.log('No processes to display');
+                return { nodes, links };
+            }
+
+            // Add process nodes (up to 30 for better visualization)
+            processes.slice(0, 30).forEach((proc, i) => {
+                const node = {
+                    id: `proc_${proc.pid}`,
+                    type: 'process',
+                    label: proc.name || proc.process_name || 'Unknown',
+                    value: proc.suspicious_score || 0,
+                    data: proc
+                };
+                nodes.push(node);
+                nodeMap.set(node.id, node);
+
+                // Link to system
+                links.push({
+                    source: 'system',
+                    target: node.id,
+                    threat: node.value > 50
+                });
+
+                // Link suspicious processes to each other
+                if (node.value > 50 && i > 0) {
+                    const prevProc = processes[i - 1];
+                    const prevScore = prevProc.suspicious_score || 0;
+                    if (prevScore > 50) {
+                        links.push({
+                            source: `proc_${prevProc.pid}`,
+                            target: node.id,
+                            threat: true
+                        });
+                    }
+                }
+            });
+
+            return { nodes, links };
+        }
+
+        // Initialize force-directed network graph
+        function initializeNetwork() {
+            const svg = d3.select('#threat-network');
+            const width = svg.node().clientWidth;
+            const height = svg.node().clientHeight;
+
+            svg.attr('width', width).attr('height', height);
+
+            simulation = d3.forceSimulation()
+                .force('link', d3.forceLink().id(d => d.id).distance(150))
+                .force('charge', d3.forceManyBody().strength(-400))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(40));
+
+            return svg;
+        }
+
+        // Update network graph
+        function updateNetwork(data) {
+            const svg = d3.select('#threat-network');
+            const width = svg.node().clientWidth;
+            const height = svg.node().clientHeight;
+
+            // Update simulation
+            simulation.nodes(data.nodes);
+            simulation.force('link').links(data.links);
+
+            // Update links
+            const link = svg.selectAll('.link')
+                .data(data.links, d => `${d.source.id}-${d.target.id}`);
+
+            link.exit().remove();
+
+            const linkEnter = link.enter()
+                .append('line')
+                .attr('class', d => d.threat ? 'link threat' : 'link')
+                .attr('stroke-dasharray', d => d.threat ? '5,5' : 'none');
+
+            link.merge(linkEnter);
+
+            // Update nodes
+            const node = svg.selectAll('.node')
+                .data(data.nodes, d => d.id);
+
+            node.exit().remove();
+
+            const nodeEnter = node.enter()
+                .append('g')
+                .attr('class', 'node')
+                .call(d3.drag()
+                    .on('start', dragStarted)
+                    .on('drag', dragged)
+                    .on('end', dragEnded))
+                .on('mouseover', showTooltip)
+                .on('mouseout', hideTooltip);
+
+            // Add circles
+            nodeEnter.append('circle')
+                .attr('r', d => d.type === 'system' ? 30 : Math.max(10, d.value / 3))
+                .attr('fill', d => {
+                    if (d.type === 'system') return '#667eea';
+                    if (d.value > 70) return '#ef4444';
+                    if (d.value > 50) return '#f59e0b';
+                    return '#10b981';
+                })
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 2)
+                .attr('opacity', 0.9);
+
+            // Add labels
+            nodeEnter.append('text')
+                .attr('dy', d => d.type === 'system' ? -35 : (Math.max(10, d.value / 3) + 15))
+                .text(d => d.label.length > 12 ? d.label.substring(0, 12) + '...' : d.label);
+
+            node.merge(nodeEnter);
+
+            // Update positions on tick
+            simulation.on('tick', () => {
+                svg.selectAll('.link')
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                svg.selectAll('.node')
+                    .attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+
+            simulation.alpha(1).restart();
+        }
+
+        // Drag functions
+        function dragStarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragEnded(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        // Tooltip functions
+        function showTooltip(event, d) {
+            if (d.type === 'system') return;
+
+            tooltip.classed('active', true)
+                .style('left', (event.pageX + 15) + 'px')
+                .style('top', (event.pageY - 15) + 'px')
+                .html(`
+                    <strong>${d.label}</strong><br>
+                    PID: ${d.data.pid}<br>
+                    Threat Score: ${d.value}/100<br>
+                    CPU: ${(d.data.cpu_percent || 0).toFixed(1)}%<br>
+                    Memory: ${((d.data.memory_mb || 0) / 1024).toFixed(1)} GB
+                `);
+        }
+
+        function hideTooltip() {
+            tooltip.classed('active', false);
+        }
+
+        // Draw world map with REAL threat locations
+        async function drawWorldMap() {
+            const svg = d3.select('#map-svg');
+            const width = 376;
+            const height = 200;
+
+            // Simple world map projection
+            const projection = d3.geoNaturalEarth1()
+                .scale(80)
+                .translate([width / 2, height / 2]);
+
+            const path = d3.geoPath().projection(projection);
+
+            // Load world data
+            d3.json('https://unpkg.com/world-atlas@2/countries-110m.json').then(async world => {
+                const countries = topojson.feature(world, world.objects.countries);
+
+                svg.selectAll('path')
+                    .data(countries.features)
+                    .enter()
+                    .append('path')
+                    .attr('d', path)
+                    .attr('fill', 'rgba(255, 255, 255, 0.05)')
+                    .attr('stroke', 'rgba(255, 255, 255, 0.1)')
+                    .attr('stroke-width', 0.5);
+
+                // Fetch REAL threat locations from API
+                try {
+                    const response = await fetch(`${API_BASE}/api/threats/map?hours=24`);
+                    const data = await response.json();
+                    const threats = data.threats || [];
+
+                    if (threats.length === 0) {
+                        // Show placeholder message
+                        svg.append('text')
+                            .attr('x', width / 2)
+                            .attr('y', height / 2)
+                            .attr('text-anchor', 'middle')
+                            .attr('fill', 'rgba(255, 255, 255, 0.5)')
+                            .attr('font-size', '12px')
+                            .text('No network threats detected yet');
+                        return;
+                    }
+
+                    // Add REAL threat markers
+                    svg.selectAll('circle')
+                        .data(threats)
+                        .enter()
+                        .append('circle')
+                        .attr('cx', d => projection([d.lon, d.lat])[0])
+                        .attr('cy', d => projection([d.lon, d.lat])[1])
+                        .attr('r', d => Math.min(3 + (d.threat_score / 20), 8))
+                        .attr('fill', d => d.threat_score > 70 ? '#ef4444' : d.threat_score > 50 ? '#f59e0b' : '#10b981')
+                        .attr('opacity', 0.8)
+                        .style('cursor', 'pointer')
+                        .on('mouseover', function(event, d) {
+                            tooltip.classed('active', true)
+                                .style('left', (event.pageX + 15) + 'px')
+                                .style('top', (event.pageY - 15) + 'px')
+                                .html(`
+                                    <strong>${d.country} - ${d.city}</strong><br>
+                                    IP: ${d.ip}:${d.port}<br>
+                                    Process: ${d.process}<br>
+                                    Threat: ${d.threat_score}/100<br>
+                                    Connections: ${d.count}
+                                `);
+                        })
+                        .on('mouseout', function() {
+                            tooltip.classed('active', false);
+                        });
+                } catch (error) {
+                    console.error('Failed to load threat map:', error);
+                }
+            });
+        }
+
+        // Draw threat score arc
+        function drawThreatArc(score) {
+            const svg = d3.select('#threat-arc-svg');
+            svg.selectAll('*').remove();
+
+            const width = 180;
+            const height = 180;
+            const radius = 70;
+
+            const arc = d3.arc()
+                .innerRadius(radius - 15)
+                .outerRadius(radius)
+                .startAngle(-Math.PI / 2)
+                .endAngle((score / 100) * Math.PI * 1.5 - Math.PI / 2);
+
+            const g = svg.append('g')
+                .attr('transform', `translate(${width/2}, ${height/2 + 20})`);
+
+            // Background arc
+            g.append('path')
+                .attr('d', d3.arc()
+                    .innerRadius(radius - 15)
+                    .outerRadius(radius)
+                    .startAngle(-Math.PI / 2)
+                    .endAngle(Math.PI))
+                .attr('fill', 'rgba(255, 255, 255, 0.05)');
+
+            // Score arc
+            g.append('path')
+                .attr('d', arc)
+                .attr('fill', score > 70 ? '#ef4444' : score > 40 ? '#f59e0b' : '#10b981')
+                .attr('opacity', 0.9);
+
+            // Center text
+            g.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '-10')
+                .attr('fill', '#fff')
+                .attr('font-size', '32px')
+                .attr('font-weight', '700')
+                .text(Math.round(score));
+
+            g.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', '15')
+                .attr('fill', 'rgba(255, 255, 255, 0.5)')
+                .attr('font-size', '12px')
+                .text('THREAT SCORE');
+        }
+
+        // Main update function
+        async function updateDashboard() {
+            const data = await fetchData();
+            if (!data) return;
+
+            // Hide loading
+            d3.select('#loading').style('display', 'none');
+
+            // Update all visualizations
+            updateHeaderStats(data.stats);
+            updateSidebarStats(data.stats);
+            updateMetrics(data.stats);
+            
+            // Check collector status
+            checkCollectorStatus();
+
+            // Update network graph
+            const graphData = buildGraphData(data.processes, data.alerts);
+            updateNetwork(graphData);
+
+            // Update threat arc
+            drawThreatArc(data.stats.average_threat_score || 0);
+        }
+
+        // Initialize dashboard
+        async function init() {
+            initializeNetwork();
+            drawWorldMap();
+            await updateDashboard();
+            setInterval(updateDashboard, REFRESH_INTERVAL);
+        }
+
+        // Start dashboard
+        init();
+
+        // ========== AI MODAL FUNCTIONS ==========
+        
+        let aiAnalysisData = null;
+
+        // Fetch AI analysis
+        async function fetchAIAnalysis() {
+            if (aiAnalysisData) return aiAnalysisData;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/ai/analyze`);
+                aiAnalysisData = await response.json();
+                return aiAnalysisData;
+            } catch (error) {
+                console.error('Failed to fetch AI analysis:', error);
+                return null;
+            }
+        }
+
+        // Show AI modal
+        function showAIModal(title, contentHtml) {
+            const modal = document.getElementById('ai-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalBody = document.getElementById('modal-body');
+            
+            modalTitle.textContent = title;
+            modalBody.innerHTML = contentHtml;
+            modal.classList.add('active');
+        }
+
+        // Close modal
+        function closeModal() {
+            const modal = document.getElementById('ai-modal');
+            modal.classList.remove('active');
+        }
+
+        // Close on background click
+        document.addEventListener('click', (e) => {
+            const modal = document.getElementById('ai-modal');
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+
+        // Close on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // Show system health analysis
+        async function showHealthAnalysis() {
+            showAIModal('System Health Analysis', '<div class="loading-spinner">Analyzing...</div>');
+            
+            const analysis = await fetchAIAnalysis();
+            if (!analysis || !analysis.health) {
+                document.getElementById('modal-body').innerHTML = '<p>Failed to load analysis</p>';
+                return;
+            }
+            
+            const health = analysis.health;
+            let html = `
+                <div style="margin-bottom: 20px;">
+                    <div style="font-size: 48px; font-weight: bold; text-align: center; margin-bottom: 10px;">
+                        ${health.score}%
+                    </div>
+                    <div style="text-align: center; color: rgba(255, 255, 255, 0.8);">
+                        Grade: ${health.grade}
+                    </div>
+                    <p style="margin-top: 20px;">${health.summary}</p>
+                </div>
+            `;
+            
+            if (health.issues && health.issues.length > 0) {
+                html += '<h3 style="margin: 20px 0 12px 0;">Issues Detected:</h3>';
+                health.issues.forEach(issue => {
+                    html += `
+                        <div class="issue-card ${issue.severity}">
+                            <div class="issue-title">${issue.title}</div>
+                            <div class="issue-explanation">${issue.explanation}</div>
+                            ${issue.recommendations ? `
+                                <div><strong>Recommendations:</strong></div>
+                                <ul class="recommendation-list">
+                                    ${issue.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                                </ul>
+                            ` : ''}
+                            <div style="color: rgba(255, 255, 255, 0.6); font-size: 12px; margin-top: 8px;">
+                                Impact: ${issue.impact}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            document.getElementById('modal-body').innerHTML = html;
+        }
+
+        // Show threat analysis
+        async function showThreatAnalysis() {
+            showAIModal('Threat Level Analysis', '<div class="loading-spinner">Analyzing...</div>');
+            
+            const [analysis, activeResponse] = await Promise.all([
+                fetchAIAnalysis(),
+                fetch(`${API_BASE}/api/processes/active`).then(r => r.json()).catch(() => ({count: 0, processes: []}))
+            ]);
+            
+            if (!analysis || !analysis.threats) {
+                document.getElementById('modal-body').innerHTML = '<p>Failed to load analysis</p>';
+                return;
+            }
+            
+            const threats = analysis.threats;
+            let html = `
+                <div style="margin-bottom: 20px;">
+                    <div style="font-size: 48px; font-weight: bold; text-align: center; margin-bottom: 10px;">
+                        ${threats.score}%
+                    </div>
+                    <div style="text-align: center; color: rgba(255, 255, 255, 0.8);">
+                        Status: ${threats.status}
+                    </div>
+                    <p style="margin-top: 20px;">${threats.message}</p>
+                    <p style="color: rgba(255, 255, 255, 0.8);">${threats.explanation}</p>
+                </div>
+                
+                <div style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 12px; border-radius: 4px; margin: 16px 0;">
+                    <strong>Why not 0%?</strong><br>
+                    ${threats.why_not_zero}
+                </div>
+            `;
+            
+            // Show ACTIVE threats first (currently running)
+            const activeProcesses = activeResponse.processes || [];
+            if (activeProcesses.length > 0) {
+                html += '<h3 style="margin: 20px 0 12px 0; color: #ef4444;">⚠️ Active Threats (Currently Running):</h3>';
+                activeProcesses.slice(0, 5).forEach((proc, idx) => {
+                    const canKill = proc.suspicious_score > 60 && proc.name !== 'kernel_task' && proc.name !== 'launchd';
+                    html += `
+                        <div class="issue-card critical">
+                            <div class="issue-title">#${idx + 1}: ${proc.name} (PID: ${proc.pid}) 🟢 ACTIVE</div>
+                            <div style="color: rgba(255, 255, 255, 0.8); margin: 8px 0;">
+                                <strong>Score:</strong> ${proc.suspicious_score}/100<br>
+                                <strong>CPU:</strong> ${proc.cpu_percent.toFixed(1)}%<br>
+                                <strong>Memory:</strong> ${proc.memory_mb.toFixed(0)} MB
+                            </div>
+                            ${canKill ? `
+                                <button class="fix-button" onclick="killProcess(${proc.pid}, '${proc.name}')" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); margin-top: 12px;">
+                                    🛑 Kill Process Now
+                                </button>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+            }
+            
+            if (threats.top_threats && threats.top_threats.length > 0) {
+                html += '<h3 style="margin: 20px 0 12px 0;">Top Threats (Historical):</h3>';
+                html += '<p style="color: rgba(255, 255, 255, 0.6); font-size: 13px; margin-bottom: 16px;">Showing threats detected in last 24 hours. PIDs may no longer be active.</p>';
+                threats.top_threats.forEach((threat, idx) => {
+                    const canKill = threat.score > 60 && threat.name !== 'kernel_task' && threat.name !== 'launchd';
+                    // Calculate age of threat
+                    const ageMinutes = threat.timestamp ? Math.round((Date.now()/1000 - threat.timestamp) / 60) : 0;
+                    const isRecent = ageMinutes < 5;
+                    
+                    html += `
+                        <div class="issue-card ${threat.score > 70 ? 'critical' : threat.score > 50 ? 'high' : 'medium'}">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div class="issue-title">#${idx + 1}: ${threat.name} (PID: ${threat.pid})</div>
+                                ${ageMinutes > 0 ? `<div style="font-size: 11px; color: rgba(255, 255, 255, 0.5);">${ageMinutes}m ago</div>` : ''}
+                            </div>
+                            <div style="color: rgba(255, 255, 255, 0.8); margin: 8px 0;">
+                                <strong>Score:</strong> ${threat.score}/100<br>
+                                <strong>Why:</strong> ${threat.why_suspicious}
+                            </div>
+                            <div style="background: rgba(102, 126, 234, 0.1); padding: 8px; border-radius: 4px; margin-top: 8px;">
+                                ${threat.recommended_action}
+                            </div>
+                            ${canKill && isRecent ? `
+                                <button class="fix-button" onclick="killProcess(${threat.pid}, '${threat.name}')" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); margin-top: 12px;">
+                                    🛑 Kill Process (PID ${threat.pid})
+                                </button>
+                            ` : canKill ? `
+                                <div style="color: rgba(255, 255, 255, 0.4); font-size: 12px; margin-top: 8px; font-style: italic;">
+                                    Process likely no longer active (detected ${ageMinutes}m ago)
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+            }
+            
+            if (threats.recommended_actions) {
+                html += '<h3 style="margin: 20px 0 12px 0;">Recommended Actions:</h3>';
+                html += '<ul class="recommendation-list">';
+                threats.recommended_actions.forEach(action => {
+                    html += `<li>${action}</li>`;
+                });
+                html += '</ul>';
+            }
+            
+            document.getElementById('modal-body').innerHTML = html;
+        }
+
+        // Show memory analysis
+        async function showMemoryAnalysis() {
+            showAIModal('Memory Analysis', '<div class="loading-spinner">Analyzing...</div>');
+            
+            const analysis = await fetchAIAnalysis();
+            if (!analysis || !analysis.memory) {
+                document.getElementById('modal-body').innerHTML = '<p>Failed to load analysis</p>';
+                return;
+            }
+            
+            const memory = analysis.memory;
+            let html = `
+                <div style="margin-bottom: 20px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 32px; font-weight: bold;">${memory.memory_percent}%</div>
+                            <div style="color: rgba(255, 255, 255, 0.6);">RAM Usage</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 32px; font-weight: bold; color: ${memory.swap_percent > 80 ? '#ef4444' : '#f59e0b'};">${memory.swap_percent}%</div>
+                            <div style="color: rgba(255, 255, 255, 0.6);">Swap Usage</div>
+                        </div>
+                    </div>
+                    <div style="background: ${memory.swap_percent > 80 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)'}; padding: 16px; border-radius: 8px;">
+                        <strong>Diagnosis:</strong> ${memory.diagnosis}
+                    </div>
+                </div>
+            `;
+            
+            if (memory.top_consumers && memory.top_consumers.length > 0) {
+                html += '<h3 style="margin: 20px 0 12px 0;">Top Memory Consumers:</h3>';
+                memory.top_consumers.forEach((proc, idx) => {
+                    html += `
+                        <div style="display: flex; justify-content: space-between; padding: 8px; background: rgba(255, 255, 255, 0.05); border-radius: 4px; margin-bottom: 8px;">
+                            <span><strong>${idx + 1}.</strong> ${proc.name}</span>
+                            <span style="color: #667eea;">${proc.memory_mb.toFixed(0)} MB</span>
+                        </div>
+                    `;
+                });
+            }
+            
+            if (memory.recommendations && memory.recommendations.length > 0) {
+                html += '<h3 style="margin: 20px 0 12px 0;">Recommended Actions:</h3>';
+                memory.recommendations.forEach(rec => {
+                    html += `
+                        <div class="issue-card">
+                            <div style="font-weight: 600; margin-bottom: 8px;">Priority ${rec.priority}: ${rec.action}</div>
+                            ${rec.targets ? `<div style="color: rgba(255, 255, 255, 0.8);">Targets: ${rec.targets.join(', ')}</div>` : ''}
+                            ${rec.expected_recovery ? `<div style="color: #10b981; margin-top: 4px;">Expected recovery: ${rec.expected_recovery}</div>` : ''}
+                            ${rec.warning ? `<div style="color: #f59e0b; margin-top: 4px;">⚠️ ${rec.warning}</div>` : ''}
+                        </div>
+                    `;
+                });
+            }
+            
+            document.getElementById('modal-body').innerHTML = html;
+        }
+
+        // Kill process function
+        async function killProcess(pid, name) {
+            if (!confirm(`Are you sure you want to kill process "${name}" (PID: ${pid})?\n\n⚠️ This action cannot be undone!`)) {
+                return;
+            }
+            
+            try {
+                // Execute kill command via backend API
+                const response = await fetch(`${API_BASE}/api/process/kill/${pid}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+                
+                if (response.ok) {
+                    alert(`✅ Process "${name}" (PID: ${pid}) terminated successfully!`);
+                    closeModal();
+                    // Refresh the dashboard data
+                    aiAnalysisData = null;
+                    await updateDashboard();
+                } else {
+                    const error = await response.json();
+                    alert(`❌ Failed to kill process: ${error.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                alert(`❌ Error: ${error.message}`);
+            }
+        }
+
+        // Add click handlers to metrics
+        document.addEventListener('DOMContentLoaded', () => {
+            // System Health circle
+            const healthCircles = document.querySelectorAll('.stat-circle');
+            if (healthCircles[0]) {
+                healthCircles[0].addEventListener('click', showHealthAnalysis);
+                healthCircles[0].style.cursor = 'pointer';
+            }
+            
+            // Threat Level circle
+            if (healthCircles[1]) {
+                healthCircles[1].addEventListener('click', showThreatAnalysis);
+                healthCircles[1].style.cursor = 'pointer';
+            }
+            
+            // Memory bubble
+            const memoryBubble = document.querySelectorAll('.metric-bubble')[1];
+            if (memoryBubble) {
+                memoryBubble.addEventListener('click', showMemoryAnalysis);
+            }
+        });
+    </script>
+</body>
+</html>

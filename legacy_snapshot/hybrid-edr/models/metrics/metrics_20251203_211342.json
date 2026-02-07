@@ -1,0 +1,78 @@
+{
+  "timestamp": "2025-12-03T21:13:42.443075",
+  "training_time_seconds": 1.9908,
+  "total_samples": 219618,
+  "features": [
+    "cpu_percent",
+    "memory_mb",
+    "num_threads",
+    "connections_count",
+    "parent_pid_norm",
+    "has_network",
+    "is_child"
+  ],
+  "label_distribution": {
+    "benign": 147588,
+    "malicious": 0,
+    "unlabeled": 72030
+  },
+  "models": {
+    "isolation_forest": {
+      "model": "IsolationForest",
+      "total_samples": 219618,
+      "anomalies_detected": 21937,
+      "anomaly_percentage": 9.988707665127631,
+      "mean_anomaly_score": -0.36198886222512683,
+      "std_anomaly_score": 0.10040388630467693,
+      "min_anomaly_score": -0.8285393103789711,
+      "max_anomaly_score": -0.3100651909491426
+    },
+    "random_forest": {
+      "model": "RandomForest",
+      "train_samples": 118070,
+      "test_samples": 29518,
+      "accuracy": 1.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0,
+      "confusion_matrix": {
+        "true_negatives": 29518,
+        "false_positives": 0,
+        "false_negatives": 0,
+        "true_positives": 0
+      },
+      "feature_importance": [
+        {
+          "feature": "cpu_percent",
+          "importance": 0.0
+        },
+        {
+          "feature": "memory_mb",
+          "importance": 0.0
+        },
+        {
+          "feature": "num_threads",
+          "importance": 0.0
+        },
+        {
+          "feature": "connections_count",
+          "importance": 0.0
+        },
+        {
+          "feature": "parent_pid_norm",
+          "importance": 0.0
+        },
+        {
+          "feature": "has_network",
+          "importance": 0.0
+        },
+        {
+          "feature": "is_child",
+          "importance": 0.0
+        }
+      ]
+    }
+  }
+}

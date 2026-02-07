@@ -1,0 +1,32 @@
+# NAS EDR Requirements (Docker Container)
+# This matches the local Mac EDR capabilities
+
+# Core monitoring and system
+psutil>=5.9.0
+watchdog>=6.0.0
+
+# Web framework and dashboard
+flask>=3.0.0
+flask-cors>=4.0.0
+flask-socketio>=5.4.0
+python-socketio>=5.10.0
+simple-websocket>=1.0.0
+
+# Machine Learning (if enabled)
+scikit-learn>=1.3.0
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+joblib>=1.3.0
+
+# Data storage and serialization
+pyyaml>=6.0.0
+
+# Network and HTTP
+requests>=2.31.0
+
+# AI/LLM integration
+ollama>=0.1.0
+
+# Alerting (optional)
+twilio>=8.0.0
