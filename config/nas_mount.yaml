@@ -1,0 +1,14 @@
+nas:
+  ip: "192.168.1.80"
+  protocol: "smb"
+  user: "garrylewis"
+  shares:
+    - "Apps"
+    - "Data"
+    - "Docker"
+  mount_root: "/Volumes"
+  ping_timeout_seconds: 2
+
+verification:
+  # simple check: does mount path exist after mount
+  require_mount_path: true
