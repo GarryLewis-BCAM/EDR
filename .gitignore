@@ -15,3 +15,10 @@ legacy_snapshot/**/data/
 legacy_snapshot/**/config/
 legacy_snapshot/**/ssl/
 legacy_snapshot/**/.env
+
+# Python artifacts
+__pycache__/
+*.pyc
+
+# Local-only ops_agent config
+config/ops_agent.local.yaml

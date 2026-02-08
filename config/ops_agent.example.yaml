@@ -1,0 +1,21 @@
+agent:
+  check_interval_seconds: 30
+  failure_threshold: 3
+  cooldown_minutes: 15
+  max_attempts_per_incident: 1
+
+router:
+  ip: 192.168.1.1
+
+nas:
+  ip: 192.168.1.80
+  name: synology-nas
+
+playbooks:
+  simulate_only: true
+
+notifications:
+  enabled: false
+
+power:
+  nas_outlet_id: 4

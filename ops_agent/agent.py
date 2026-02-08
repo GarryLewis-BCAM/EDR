@@ -46,7 +46,7 @@ def main():
                 if tracker.can_attempt_recovery() and tracker.can_act():
                     print("[ACTION] Starting NAS recovery playbook")
                     tracker.mark_action()
-                    success = recover_nas(simulate=cfg["playbooks"]["simulate_only"])
+                    success = recover_nas(cfg)
                     tracker.record_recovery_attempt()
                     print("[RESULT]", "success" if success else "failed")
 
