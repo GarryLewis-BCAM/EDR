@@ -2,7 +2,7 @@ import time
 import yaml
 
 from ops_agent.state import StateTracker, AgentState
-from ops_agent.checks import router_up, nas_up
+from ops_agent.checks import router_up, nas_probe
 from ops_agent.playbooks import recover_nas
 
 CONFIG_PATH = "config/ops_agent.local.yaml"
@@ -22,41 +22,45 @@ def main():
         max_attempts_per_incident=max_attempts,
     )
 
+    state_announced = None
+
     try:
         while True:
             router_ok = router_up(cfg["router"]["ip"])
-            nas_ok = nas_up(cfg["nas"]["ip"]) if router_ok else False
+            nas_result = nas_probe(cfg["nas"]["ip"]) if router_ok else None
+            nas_ok = nas_result.ok if nas_result else False
 
             if router_ok and nas_ok:
                 tracker.record_success()
-                print("[OK] Router + NAS reachable")
+                state_announced = None
+                print(f"[OK] Router + NAS reachable (via {nas_result.method})")
             else:
-                # clearer logging
                 if not router_ok:
                     print("[WARN] Router unreachable")
                 else:
-                    print("[WARN] NAS unreachable (router OK)")
+                    print(f"[WARN] NAS unreachable (router OK) [{nas_result.detail}]")
 
                 tracker.record_failure()
 
-            # If we are degraded, try recovery if allowed.
             if tracker.state == AgentState.DEGRADED:
-                if not tracker.can_attempt_recovery():
-                    # Budget exhausted; mark failed once and stop trying until recovery.
-                    if tracker.state != AgentState.RECOVERY_FAILED:
-                        tracker.mark_failed()
-                    print("[STATE] RECOVERY_FAILED (attempt budget exhausted)")
-                elif tracker.can_act():
+                if tracker.can_attempt_recovery() and tracker.can_act():
                     print("[ACTION] Starting NAS recovery playbook")
                     tracker.mark_action()
                     success = recover_nas(simulate=cfg["playbooks"]["simulate_only"])
                     tracker.record_recovery_attempt()
                     print("[RESULT]", "success" if success else "failed")
 
-                    # If budget now exhausted, mark failed; agent will remain quiet until OK.
                     if not tracker.can_attempt_recovery():
                         tracker.mark_failed()
+                        if state_announced != AgentState.RECOVERY_FAILED:
+                            print("[STATE] RECOVERY_FAILED (attempt budget exhausted)")
+                            state_announced = AgentState.RECOVERY_FAILED
+
+                elif not tracker.can_attempt_recovery():
+                    tracker.mark_failed()
+                    if state_announced != AgentState.RECOVERY_FAILED:
                         print("[STATE] RECOVERY_FAILED (attempt budget exhausted)")
+                        state_announced = AgentState.RECOVERY_FAILED
 
             time.sleep(cfg["agent"]["check_interval_seconds"])
 

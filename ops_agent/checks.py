@@ -2,64 +2,69 @@ import platform
 import re
 import socket
 import subprocess
-from typing import Optional
+from dataclasses import dataclass
 
-def ping(ip: str, timeout: int = 1) -> bool:
+@dataclass(frozen=True)
+class ProbeResult:
+    ok: bool
+    method: str
+    detail: str = ""
+
+def ping_probe(ip: str, timeout: int = 1) -> ProbeResult:
     try:
-        # macOS ping uses -W (ms on some versions), Linux uses -W (seconds).
-        # We'll keep it simple; it's best-effort.
         subprocess.check_output(
             ["ping", "-c", "1", "-W", str(timeout), ip],
             stderr=subprocess.DEVNULL
         )
-        return True
-    except Exception:
-        return False
+        return ProbeResult(True, "ping", f"{ip} replied")
+    except Exception as e:
+        return ProbeResult(False, "ping", "no reply")
 
-def tcp_connect(ip: str, port: int, timeout: float = 1.0) -> bool:
+def tcp_probe(ip: str, port: int, timeout: float = 1.0) -> ProbeResult:
     try:
         with socket.create_connection((ip, port), timeout=timeout):
-            return True
+            return ProbeResult(True, f"tcp:{port}", "connect ok")
     except Exception:
-        return False
+        return ProbeResult(False, f"tcp:{port}", "connect failed")
 
-def arp_seen(ip: str) -> bool:
-    """
-    Returns True if the OS neighbor/ARP cache has a resolved entry for the IP.
-    This is useful when ICMP is blocked but the device is present on LAN.
-    """
+def arp_probe(ip: str) -> ProbeResult:
     system = platform.system().lower()
 
     try:
         if "darwin" in system or "mac" in system:
-            # Example: "? (192.168.1.80) at aa:bb:cc:dd:ee:ff on en0 ..."
             out = subprocess.check_output(["arp", "-n", ip], stderr=subprocess.DEVNULL).decode("utf-8", "ignore")
-            return "(incomplete)" not in out and re.search(r"\bat\s+([0-9a-f]{1,2}:){5}[0-9a-f]{1,2}\b", out, re.I) is not None
+            if "(incomplete)" in out:
+                return ProbeResult(False, "arp", "incomplete")
+            ok = re.search(r"\bat\s+([0-9a-f]{1,2}:){5}[0-9a-f]{1,2}\b", out, re.I) is not None
+            return ProbeResult(ok, "arp", "mac present" if ok else "no mac")
 
-        # Linux: `ip neigh show 192.168.1.80` -> "... lladdr aa:bb... REACHABLE"
         out = subprocess.check_output(["ip", "neigh", "show", ip], stderr=subprocess.DEVNULL).decode("utf-8", "ignore")
         if "FAILED" in out.upper() or "INCOMPLETE" in out.upper():
-            return False
-        return re.search(r"\blladdr\s+([0-9a-f]{1,2}:){5}[0-9a-f]{1,2}\b", out, re.I) is not None
+            return ProbeResult(False, "neigh", "incomplete/failed")
+        ok = re.search(r"\blladdr\s+([0-9a-f]{1,2}:){5}[0-9a-f]{1,2}\b", out, re.I) is not None
+        return ProbeResult(ok, "neigh", "lladdr present" if ok else "no lladdr")
 
     except Exception:
-        return False
+        return ProbeResult(False, "arp", "probe error")
 
 def router_up(router_ip: str) -> bool:
-    # Router should answer ping normally
-    return ping(router_ip)
+    return ping_probe(router_ip).ok
+
+def nas_probe(nas_ip: str) -> ProbeResult:
+    r1 = ping_probe(nas_ip)
+    if r1.ok:
+        return r1
+
+    r2 = tcp_probe(nas_ip, 445, timeout=1.0)
+    if r2.ok:
+        return r2
+
+    r3 = arp_probe(nas_ip)
+    if r3.ok:
+        return r3
+
+    # Return the “best” failure detail (prefer tcp over ping over arp)
+    return ProbeResult(False, "down", f"{r1.method}:{r1.detail}, {r2.method}:{r2.detail}, {r3.method}:{r3.detail}")
 
 def nas_up(nas_ip: str) -> bool:
-    # 1) ICMP
-    if ping(nas_ip):
-        return True
-
-    # 2) SMB/TCP is often a better liveness signal than ICMP
-    if tcp_connect(nas_ip, 445, timeout=1.0):
-        return True
-
-    # 3) ARP/neighbor cache detection (best-effort)
-    if arp_seen(nas_ip):
-        return True
-
-    return False
+    return nas_probe(nas_ip).ok
