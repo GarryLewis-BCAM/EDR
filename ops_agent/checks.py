@@ -48,7 +48,15 @@ def arp_probe(ip: str) -> ProbeResult:
         return ProbeResult(False, "arp", "probe error")
 
 def router_up(router_ip: str) -> bool:
-    return ping_probe(router_ip).ok
+    r = ping_probe(router_ip)
+    if r.ok:
+        return True
+    # fallbacks: many routers answer on DNS or web even if ICMP is restricted
+    if tcp_probe(router_ip, 53, timeout=1.0).ok:
+        return True
+    if tcp_probe(router_ip, 80, timeout=1.0).ok:
+        return True
+    return False
 
 def nas_probe(nas_ip: str) -> ProbeResult:
     r1 = ping_probe(nas_ip)
@@ -68,3 +76,86 @@ def nas_probe(nas_ip: str) -> ProbeResult:
 
 def nas_up(nas_ip: str) -> bool:
     return nas_probe(nas_ip).ok
+
+# --- LOCAL gateway discovery (added) ---
+def get_default_gateway():
+    """
+    Returns the default IPv4 gateway as seen by the OS (macOS).
+    """
+    try:
+        out = subprocess.check_output(
+            ["route", "-n", "get", "default"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        for line in out.splitlines():
+            if line.strip().startswith("gateway:"):
+                return line.split()[-1]
+    except Exception:
+        pass
+    return None
+
+def lan_router_up() -> bool:
+    """
+    True if the local LAN gateway is reachable.
+    Avoids false negatives caused by VPN/tunnel route hijacks.
+    """
+    gw = get_default_gateway()
+    if not gw:
+        return False
+
+    # 1) ICMP
+    if ping_probe(gw).ok:
+        return True
+
+    # 2) TCP fallbacks (routers often answer these even if ICMP blocked)
+    try:
+        if tcp_probe(gw, 53, timeout=1.0).ok:
+            return True
+        if tcp_probe(gw, 80, timeout=1.0).ok:
+            return True
+    except Exception:
+        pass
+
+    return False
+
+def gateway_interface(gateway_ip: str):
+    """
+    Returns the interface name used to reach a specific IP (macOS).
+    Example: 'en0', 'utun2', etc.
+    """
+    try:
+        out = subprocess.check_output(
+            ["route", "-n", "get", gateway_ip],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        for line in out.splitlines():
+            if line.strip().startswith("interface:"):
+                return line.split()[-1]
+    except Exception:
+        pass
+    return None
+
+def local_context():
+    """
+    Returns one of:
+      - LOCAL_OK
+      - LOCAL_DOWN
+      - VPN_HIJACK
+      - UNKNOWN
+    """
+    gw = get_default_gateway()
+    if not gw:
+        return ("UNKNOWN", None, None)
+
+    iface = gateway_interface(gw)
+
+    # If gateway route goes via tunnel, you're "logically remote" from LAN
+    if iface and iface.startswith("utun"):
+        return ("VPN_HIJACK", gw, iface)
+
+    if lan_router_up():
+        return ("LOCAL_OK", gw, iface or "unknown")
+
+    return ("LOCAL_DOWN", gw, iface or "unknown")

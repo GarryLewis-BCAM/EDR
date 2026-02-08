@@ -2,7 +2,7 @@ import time
 import yaml
 
 from ops_agent.state import StateTracker, AgentState
-from ops_agent.checks import router_up, nas_probe
+from ops_agent.checks import lan_router_up, nas_probe, local_context
 from ops_agent.playbooks import recover_nas
 
 CONFIG_PATH = "config/ops_agent.local.yaml"
@@ -13,6 +13,10 @@ def load_config():
 
 def main():
     cfg = load_config()
+
+    ctx, gw, iface = local_context()
+    if ctx != "LOCAL_OK":
+        print(f"[INFO] context={ctx} gateway={gw} iface={iface}")
 
     max_attempts = cfg.get("agent", {}).get("max_attempts_per_incident", 1)
 
@@ -26,7 +30,7 @@ def main():
 
     try:
         while True:
-            router_ok = router_up(cfg["router"]["ip"])
+            router_ok = lan_router_up()
             nas_result = nas_probe(cfg["nas"]["ip"]) if router_ok else None
             nas_ok = nas_result.ok if nas_result else False
 
