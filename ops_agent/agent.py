@@ -11,6 +11,22 @@ def load_config():
     with open(CONFIG_PATH) as f:
         return yaml.safe_load(f)
 
+
+def maybe_notify_state_change(cfg, new_state, message: str) -> None:
+    """Send a single Telegram message when agent state changes."""
+    if not cfg.get("notifications", {}).get("enabled", False):
+        return
+    t = (cfg.get("notifications", {}) or {}).get("telegram") or {}
+    if not t:
+        return
+    try:
+        from ops_agent.notify.telegram import send_telegram_message
+        send_telegram_message(t["bot_token"], int(t["chat_id"]), f"[EDR] {new_state}: {message}")
+    except Exception:
+        # Never crash the agent because notifications failed
+        return
+
+
 def main():
     cfg = load_config()
 
@@ -26,6 +42,9 @@ def main():
         max_attempts_per_incident=max_attempts,
     )
 
+    last_state = None
+    maintenance_announced = False
+
     state_announced = None
 
     try:
@@ -34,17 +53,40 @@ def main():
             nas_result = nas_probe(cfg["nas"]["ip"]) if router_ok else None
             nas_ok = nas_result.ok if nas_result else False
 
+            maintenance = cfg.get("maintenance", {}).get("nas_expected_offline", False)
+
             if router_ok and nas_ok:
                 tracker.record_success()
+                maintenance_announced = False
                 state_announced = None
                 print(f"[OK] Router + NAS reachable (via {nas_result.method})")
+
             else:
                 if not router_ok:
                     print("[WARN] Router unreachable")
-                else:
-                    print(f"[WARN] NAS unreachable (router OK) [{nas_result.detail}]")
+                    tracker.record_failure()
 
-                tracker.record_failure()
+                else:
+                    # Router OK, NAS not OK
+                    if maintenance:
+                        if not maintenance_announced:
+                            msg = "NAS expected offline (maintenance) — suppressing recovery + alerts"
+                            print(f"[INFO] {msg}")
+                            maybe_notify_state_change(cfg, "MAINTENANCE", msg)
+                            maintenance_announced = True
+                        # Do NOT record failure or escalate while in maintenance mode
+                        time.sleep(cfg["agent"]["check_interval_seconds"])
+                        continue
+
+                    print(f"[WARN] NAS unreachable (router OK) [{nas_result.detail}]")
+                    tracker.record_failure()
+
+            # state-change notification (only on transition)
+            if last_state is None:
+                last_state = tracker.state
+            elif tracker.state != last_state:
+                maybe_notify_state_change(cfg, str(tracker.state), f"router_ok={router_ok}, nas_ok={nas_ok}")
+                last_state = tracker.state
 
             if tracker.state == AgentState.DEGRADED:
                 if tracker.can_attempt_recovery() and tracker.can_act():
