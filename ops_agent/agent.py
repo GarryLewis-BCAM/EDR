@@ -14,7 +14,11 @@ def load_config():
 
 def maybe_notify_state_change(cfg, new_state, message: str) -> None:
     """Send a single Telegram message when agent state changes."""
-    if not cfg.get("notifications", {}).get("enabled", False):
+    n = cfg.get("notifications", {}) or {}
+    if not n.get("enabled", False):
+        return
+    # allow turning state-change alerts on/off independently
+    if new_state != "MAINTENANCE" and not n.get("state_change_alerts", True):
         return
     t = (cfg.get("notifications", {}) or {}).get("telegram") or {}
     if not t:
