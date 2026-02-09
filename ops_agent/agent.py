@@ -48,17 +48,52 @@ def main():
 
             if tracker.state == AgentState.DEGRADED:
                 if tracker.can_attempt_recovery() and tracker.can_act():
-                    print("[ACTION] Starting NAS recovery playbook")
-                    tracker.mark_action()
-                    success = recover_nas(cfg)
-                    tracker.record_recovery_attempt()
-                    print("[RESULT]", "success" if success else "failed")
+                    print("[ACTION] Starting NAS recovery playbook (approval-gated)")
 
-                    if not tracker.can_attempt_recovery():
+                    approval = True  # default: allow if notifications disabled
+                    if cfg.get("notifications", {}).get("enabled", False):
+                        tcfg = cfg.get("notifications", {}).get("telegram", {})
+                        if tcfg:
+                            from ops_agent.notify.telegram import send_telegram_message
+                            from ops_agent.notify.approval import wait_for_yes_no
+
+                            outlet = cfg.get("power", {}).get("nas_outlet_id", "?")
+                            send_telegram_message(
+                                tcfg["bot_token"],
+                                int(tcfg["chat_id"]),
+                                f"NAS unreachable. Approve recovery (power-cycle outlet {outlet})? Reply YES or NO.",
+                            )
+                            approval = wait_for_yes_no(
+                                tcfg["bot_token"],
+                                int(tcfg["chat_id"]),
+                                timeout_seconds=int(tcfg.get("approval_timeout_minutes", 10)) * 60,
+                            )
+                        else:
+                            approval = None  # enabled but no telegram config
+
+                    if approval is False:
                         tracker.mark_failed()
                         if state_announced != AgentState.RECOVERY_FAILED:
-                            print("[STATE] RECOVERY_FAILED (attempt budget exhausted)")
+                            print("[STATE] RECOVERY_FAILED (user denied)")
                             state_announced = AgentState.RECOVERY_FAILED
+
+                    elif approval is None and cfg.get("notifications", {}).get("enabled", False):
+                        tracker.mark_failed()
+                        if state_announced != AgentState.RECOVERY_FAILED:
+                            print("[STATE] RECOVERY_FAILED (approval timeout or missing telegram config)")
+                            state_announced = AgentState.RECOVERY_FAILED
+
+                    else:
+                        tracker.mark_action()
+                        success = recover_nas(cfg)
+                        tracker.record_recovery_attempt()
+                        print("[RESULT]", "success" if success else "failed")
+
+                        if not tracker.can_attempt_recovery():
+                            tracker.mark_failed()
+                            if state_announced != AgentState.RECOVERY_FAILED:
+                                print("[STATE] RECOVERY_FAILED (attempt budget exhausted)")
+                                state_announced = AgentState.RECOVERY_FAILED
 
                 elif not tracker.can_attempt_recovery():
                     tracker.mark_failed()
